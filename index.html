@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALL:GOLF - 골프의 모든 예약</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" data-go="home"><span>&#9679;</span> ALL:GOLF</button>
+      <div class="top-actions"><button class="round-btn" aria-label="알림">&#128276;</button><button class="round-btn" aria-label="설정">&#9881;</button></div>
+    </header>
+    <main id="app"></main>
+    <nav class="bottom-nav" aria-label="주요 메뉴">
+      <button data-go="home" class="nav-item"><b>&#8962;</b><span>홈</span></button>
+      <button data-go="list" class="nav-item"><b>&#9906;</b><span>예약</span></button>
+      <button data-go="join" class="nav-item"><b>&#129309;</b><span>조인</span></button>
+      <button data-go="benefits" class="nav-item"><b>&#9670;</b><span>혜택</span></button>
+      <button data-go="my" class="nav-item"><b>&#9675;</b><span>내 예약</span></button>
+    </nav>
+  </div>
+  <div id="modal"></div>
+  <div id="sheet" class="sheet-backdrop" aria-hidden="true">
+    <section class="search-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head"><h2>라운딩 조건 선택</h2><button id="sheet-close" aria-label="닫기">&#215;</button></div>
+      <div class="sheet-group"><h3>지역</h3><div class="sheet-options" id="sheet-region">
+        <button class="selected" data-region="전국">전국</button><button data-region="충북">충북</button><button data-region="충남">충남</button><button data-region="세종">세종</button><button data-region="대전">대전</button>
+      </div></div>
+      <div class="sheet-group"><h3>날짜</h3><div class="sheet-options" id="sheet-date">
+        <button class="selected" data-date="17">8월 17일 (월)</button><button data-date="18">8월 18일 (화)</button><button data-date="19">8월 19일 (수)</button><button data-date="20">8월 20일 (목)</button><button data-date="21">8월 21일 (금)</button>
+      </div></div>
+      <div class="sheet-group"><h3>인원</h3><div class="sheet-options" id="sheet-people"><button>2명</button><button>3명</button><button class="selected">4명</button></div></div>
+      <button id="sheet-search" class="primary sheet-search">골프장 검색하기</button>
+    </section>
+  </div>
+  <script src="courses-data.js?v=20260812-ko"></script>
+  <script src="app.js?v=20260812-favorites"></script>
+</body>
+</html>
