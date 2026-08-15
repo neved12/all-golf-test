@@ -11,7 +11,7 @@ const importedCourses = Array.isArray(window.ALL_GOLF_COURSES) ? window.ALL_GOLF
 const courses=[...demoCourses,...importedCourses];
 const root=document.querySelector('#app');
 const storeKey='allGolfReservations';
-let page='home',course=demoCourses[0],tee=null,people=4,region='\uc804\uad6d',date='2026\ub144 8\uc6d4 17\uc77c (\uc6d4)',filters=[],sort='recommend',myTab='upcoming',query='';
+let page='home',course=demoCourses[0],tee=null,people=4,region='\uc804\uad6d',date='2026\ub144 8\uc6d4 17\uc77c (\uc6d4)',calendarDate='2026-08-17',filters=[],sort='recommend',myTab='upcoming',query='';
 
 const won=n=>`${Number(n||0).toLocaleString('ko-KR')}\uc6d0`;
 const getReservations=()=>{try{return JSON.parse(localStorage.getItem(storeKey)||'[]')}catch{return[]}};
@@ -19,7 +19,9 @@ const setReservations=items=>localStorage.setItem(storeKey,JSON.stringify(items)
 const favorites=()=>{try{return [...new Set(JSON.parse(localStorage.getItem('allGolfFavorites')||'[]').filter(id=>courses.some(c=>c.id===id)))]}catch{return[]}};
 const go=next=>{page=next;render();window.scrollTo({top:0,behavior:'smooth'})};
 const currentDateShort=()=>date.replace('2026\ub144 ','').replace(' \uc77c','');
-const dateOptions=['2026\ub144 8\uc6d4 17\uc77c (\uc6d4)','2026\ub144 8\uc6d4 18\uc77c (\ud654)','2026\ub144 8\uc6d4 19\uc77c (\uc218)','2026\ub144 8\uc6d4 20\uc77c (\ubaa9)','2026\ub144 8\uc6d4 21\uc77c (\uae08)'];
+const weekdayLabels=['\uc77c','\uc6d4','\ud654','\uc218','\ubaa9','\uae08','\ud1a0'];
+const formatCalendarDate=iso=>{const d=new Date(`${iso}T00:00:00`);return `${d.getFullYear()}\ub144 ${d.getMonth()+1}\uc6d4 ${d.getDate()}\uc77c (${weekdayLabels[d.getDay()]})`};
+const dateOptions=()=>Array.from({length:5},(_,i)=>{const d=new Date(`${calendarDate}T00:00:00`);d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);return {iso,label:formatCalendarDate(iso)}});
 
 function home(){
   const available=courses.filter(c=>c.bookable);
@@ -67,7 +69,7 @@ function list(){
   const available=results.filter(c=>c.bookable),info=results.filter(c=>!c.bookable);
   const filterNames=['2\uc778 \uac00\ub2a5','\ub178\uce90\ub514','18\ud640','\ud2b9\uac00','\uc624\ub298 \uc608\uc57d','\uc8fc\ub9d0'];
   return `<div class="result-top"><button class="back" data-go="home">\u2039</button><h1>\uac80\uc0c9 \uacb0\uacfc</h1><button class="condition-edit" data-sheet>\uc870\uac74 \ubcc0\uacbd</button></div><button class="search-summary fixed-condition" data-sheet>${region} \u00b7 ${currentDateShort()} \u00b7 ${people}\uba85 <b>\uc870\uac74 \ubcc0\uacbd</b></button>
-  <div class="chips">${[['recommend','\ucd94\ucc9c\uc21c'],['price','\ub0ae\uc740 \uac00\uaca9\uc21c'],['time','\ube60\ub978 \uc2dc\uac04\uc21c']].map(([id,label])=>`<button class="chip ${sort===id?'active':''}" data-sort="${id}">${label}</button>`).join('')}</div><div class="chips">${filterNames.map(name=>`<button class="chip ${filters.includes(name)?'active':''}" data-filter="${name}">${name}</button>`).join('')}</div><p class="result-count"><b>${results.length}</b>\uac1c \uace8\ud504\uc7a5</p>
+  <div class="sort-row"><div class="chips">${[['recommend','\ucd94\ucc9c\uc21c'],['price','\ub0ae\uc740 \uac00\uaca9\uc21c'],['time','\ube60\ub978 \uc2dc\uac04\uc21c']].map(([id,label])=>`<button class="chip ${sort===id?'active':''}" data-sort="${id}">${label}</button>`).join('')}</div><button class="filter-reset" data-reset-search>\ucd08\uae30\ud654</button></div><div class="chips">${filterNames.map(name=>`<button class="chip ${filters.includes(name)?'active':''}" data-filter="${name}">${name}</button>`).join('')}</div><p class="result-count"><b>${results.length}</b>\uac1c \uace8\ud504\uc7a5</p>
   ${available.length?`<section class="result-group"><h2>\uc9c0\uae08 \uc608\uc57d \uac00\ub2a5</h2><div class="course-list">${available.map(listCard).join('')}</div></section>`:''}
   <section class="result-group"><h2>\uc9c0\uc5ed \uace8\ud504\uc7a5</h2><p>\uc81c\ud734 \uc804 \uace8\ud504\uc7a5\uc740 \uc815\ubcf4 \uac80\uc0c9\uc6a9\uc73c\ub85c \ub178\ucd9c\ub429\ub2c8\ub2e4.</p><div class="course-list">${info.map(listCard).join('')||'<div class="empty">\uac80\uc0c9 \uacb0\uacfc\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.<br>\uc870\uac74\uc744 \ubcc0\uacbd\ud574\ubcf4\uc138\uc694.</div>'}</div></section>`;
 }
@@ -76,11 +78,11 @@ function listCard(c){const saved=favorites().includes(c.id);const first=c.times[
 function detail(){
   if(!course.bookable) return `<div class="detail-top"><button class="back" data-go="list">\u2039</button><h1>${course.name}</h1></div><div class="course-hero photo-slide"><span>\uace8\ud504\uc7a5 \uc815\ubcf4</span><small>${course.region} ${course.area}</small></div><div class="notice">\uc774 \uace8\ud504\uc7a5\uc740 \uc815\ubcf4 \uac80\uc0c9\uc6a9\uc785\ub2c8\ub2e4. ALL:GOLF \uc81c\ud734 \ud6c4 \uc608\uc57d\uc774 \uac00\ub2a5\ud569\ub2c8\ub2e4.</div>`;
   const saved=favorites().includes(course.id);
-  return `<div class="detail-top"><button class="back" data-go="list">\u2039</button><h1>${course.name}</h1><div class="detail-actions"><button data-share>\u21a7</button><button class="heart ${saved?'saved':''}" data-favorite="${course.id}">${saved?'\u2665':'\u2661'}</button></div></div>
+  return `<div class="detail-top"><button class="back" data-go="list">\u2039</button><div class="detail-course-title"><h1>${course.name}</h1><button class="heart compact-favorite ${saved?'saved':''}" data-favorite="${course.id}" aria-label="\ucc1c\ud558\uae30">${saved?'\u2665':'\u2661'}</button></div><div class="detail-actions"><button data-share aria-label="\uacf5\uc720\ud558\uae30">\u21a7</button></div></div>
   <div class="course-hero photo-slide"><span>\uace8\ud504\uc7a5 \ub300\ud45c \uc0ac\uc9c4</span><small>${course.region} ${course.area} \u00b7 ${course.holes}\ud640</small></div>
   <section class="course-overview"><b>${course.name.replace(' CC',' \ucee8\ud2b8\ub9ac\ud074\ub7fd')}</b><span>\u2605 ${course.rating} \u00b7 \ud6c4\uae30 ${course.reviews}\uac1c</span><span>\ud83d\udccd ${course.address} \u00b7 ${course.holes}\ud640 \u00b7 ${course.type}</span><p>${course.description}</p><div class="detail-links"><button data-map>\uc9c0\ub3c4\ubcf4\uae30</button><button data-share>\uacf5\uc720\ud558\uae30</button></div></section>
   <div class="detail-tabs"><button class="active">\uc608\uc57d</button><button>\uace8\ud504\uc7a5\uc815\ubcf4</button><button>\ucf54\uc2a4</button><button>\uc774\uc6a9\uc548\ub0b4</button></div>
-  <h2 class="tee-title">\uc608\uc57d \ub0a0\uc9dc</h2><div class="date-row">${dateOptions.map(d=>{const [m,day,weekday]=d.match(/(\d+)\uc6d4 (\d+)\uc77c \((.)\)/).slice(1);return `<button class="date ${date===d?'active':''}" data-date="${d}">${m}/${day}<strong>${weekday}</strong></button>`}).join('')}</div>
+  <div class="tee-date-head"><h2 class="tee-title">\uc608\uc57d \ub0a0\uc9dc</h2><button class="calendar-button" data-sheet aria-label="\ub2ec\ub825\uc5d0\uc11c \ub0a0\uc9dc \uc120\ud0dd">\ud83d\udcc5</button></div><div class="date-row">${dateOptions().map(item=>{const [m,day,weekday]=item.label.match(/(\d+)\uc6d4 (\d+)\uc77c \((.)\)/).slice(1);return `<button class="date ${date===item.label?'active':''}" data-date="${item.label}" data-iso="${item.iso}">${m}/${day}<strong>${weekday}</strong></button>`}).join('')}</div>
   <div class="chips"><button class="chip active">\uc804\uccb4</button><button class="chip">1\ubd80</button><button class="chip">2\ubd80</button><button class="chip">3\ubd80</button></div>
   <h2 class="tee-title">\uc608\uc57d \uac00\ub2a5\ud55c \ud2f0\ud0c0\uc784</h2><div class="time-list">${course.times.map(t=>`<div class="time"><span><b>${t.time}</b>${t.special?'<em class="special-badge">\ud2b9\uac00</em>':''}<br><small>${won(t.price)} / 1\uc778 \u00b7 \uc794\uc5ec ${t.remaining}\ud300 \u00b7 \uc2e4\uc2dc\uac04 \ud655\uc815</small></span><button class="time-reserve" data-tee="${t.time}">\uc608\uc57d</button></div>`).join('')}</div>
   <section class="info-box"><h3>\uc774\uc6a9 \uc694\uae08 \uc548\ub0b4 <small>(\uc0d8\ud50c \ub370\uc774\ud130)</small></h3><div><span>\uadf8\ub9b0\ud53c</span><b>${won(course.price)} / 1\uc778</b></div><div><span>\uce74\ud2b8\ud53c</span><b>${won(course.cart)} / \ud300</b></div><div><span>\uce90\ub514\ud53c</span><b>${won(course.caddie)} / \ud300</b></div><div><span>\uacb0\uc81c \uc548\ub0b4</span><b>\uce74\ud2b8\ud53c\u00b7\uce90\ub514\ud53c \ud604\uc7a5 \uacb0\uc81c</b></div></section>`;
@@ -125,10 +127,11 @@ function bind(){
   root.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>go(el.dataset.go));
   root.querySelectorAll('[data-course]').forEach(el=>el.onclick=e=>{e.stopPropagation();course=courses.find(c=>c.id===el.dataset.course)||course;go('detail')});
   root.querySelectorAll('[data-tee]').forEach(el=>el.onclick=()=>{tee=course.times.find(t=>t.time===el.dataset.tee);go('booking')});
-  root.querySelectorAll('[data-date]').forEach(el=>el.onclick=()=>{date=el.dataset.date;render()});
+  root.querySelectorAll('[data-date]').forEach(el=>el.onclick=()=>{date=el.dataset.date;calendarDate=el.dataset.iso||calendarDate;render()});
   root.querySelectorAll('[data-sheet]').forEach(el=>el.onclick=openSheet);
   root.querySelectorAll('[data-sort]').forEach(el=>el.onclick=()=>{sort=el.dataset.sort;render()});
   root.querySelectorAll('[data-filter]').forEach(el=>el.onclick=()=>{filters=filters.includes(el.dataset.filter)?filters.filter(x=>x!==el.dataset.filter):[...filters,el.dataset.filter];render()});
+  root.querySelectorAll('[data-reset-search]').forEach(el=>el.onclick=()=>{sort='recommend';filters=[];query='';render()});
   root.querySelectorAll('[data-favorite]').forEach(el=>el.onclick=e=>{e.stopPropagation();toggleFavorite(el.dataset.favorite)});
   root.querySelectorAll('[data-mytab]').forEach(el=>el.onclick=()=>{myTab=el.dataset.mytab;render()});
   root.querySelectorAll('[data-cancel]').forEach(el=>el.onclick=()=>cancelReservation(el.dataset.cancel));
@@ -149,7 +152,7 @@ function render(){
 document.querySelector('#sheet-close').onclick=closeSheet;
 document.querySelector('#sheet').onclick=e=>{if(e.target.id==='sheet')closeSheet()};
 document.querySelectorAll('#sheet-region button').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('#sheet-region button').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected')});
-document.querySelectorAll('#sheet-date button').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('#sheet-date button').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected')});
+document.querySelectorAll('#sheet-date button').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('#sheet-date button').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');document.querySelector('#calendar-date').value=`2026-08-${String(btn.dataset.date).padStart(2,'0')}`});
 document.querySelectorAll('#sheet-people button').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('#sheet-people button').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected')});
-document.querySelector('#sheet-search').onclick=()=>{const r=document.querySelector('#sheet-region .selected');region=r?.dataset.region||r?.textContent||'\uc804\uad6d';const d=document.querySelector('#sheet-date .selected');if(d){const day=(d.dataset.date||d.textContent).match(/\d+/)?.[0]||'17';date=`2026\ub144 8\uc6d4 ${day}\uc77c (${Number(day)===17?'\uc6d4':Number(day)===18?'\ud654':Number(day)===19?'\uc218':Number(day)===20?'\ubaa9':'\uae08'})`}const p=document.querySelector('#sheet-people .selected');people=Number((p?.textContent||'4').match(/\d+/)?.[0]||4);closeSheet();go('list')};
+document.querySelector('#sheet-search').onclick=()=>{const r=document.querySelector('#sheet-region .selected');region=r?.dataset.region||r?.textContent||'\uc804\uad6d';const direct=document.querySelector('#calendar-date')?.value;if(direct){calendarDate=direct;date=formatCalendarDate(direct)}else{const d=document.querySelector('#sheet-date .selected');if(d){const day=(d.dataset.date||d.textContent).match(/\d+/)?.[0]||'17';calendarDate=`2026-08-${String(day).padStart(2,'0')}`;date=formatCalendarDate(calendarDate)}}const p=document.querySelector('#sheet-people .selected');people=Number((p?.textContent||'4').match(/\d+/)?.[0]||4);closeSheet();go('list')};
 render();
