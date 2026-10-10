@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ALL:GOLF - 골프의 모든 예약</title>
-  <link rel="stylesheet" href="styles.css?v=20260828-dynamic-price">
+  <link rel="stylesheet" href="styles.css?v=20261010-specials2">
 </head>
 <body>
   <div class="app-shell">
@@ -26,9 +26,8 @@
     <section class="search-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-head"><h2>라운딩 조건 선택</h2><button id="sheet-close" aria-label="닫기">&#215;</button></div>
-      <div class="sheet-group"><h3>지역</h3><div class="sheet-options" id="sheet-region">
-        <button class="selected" data-region="전국">전국</button><button data-region="충북">충북</button><button data-region="충남">충남</button><button data-region="세종">세종</button><button data-region="대전">대전</button>
-      </div></div>
+      <div class="sheet-group"><h3>지역</h3><div class="sheet-options" id="sheet-region"></div></div>
+      <div class="sheet-group"><h3>시·군</h3><select id="sheet-city" class="city-select"><option value="">전체 시·군</option></select></div>
       <div class="sheet-group"><h3>날짜</h3><div class="sheet-options" id="sheet-date">
         <button class="selected" data-date="17">8월 17일 (월)</button><button data-date="18">8월 18일 (화)</button><button data-date="19">8월 19일 (수)</button><button data-date="20">8월 20일 (목)</button><button data-date="21">8월 21일 (금)</button>
       </div><label class="calendar-input"><span>직접 날짜 선택</span><input id="calendar-date" type="date" value="2026-08-17"></label></div>
@@ -36,10 +35,9 @@
       <button id="sheet-search" class="primary sheet-search">골프장 검색하기</button>
     </section>
   </div>
-  <script src="courses-data.js?v=20260812-ko"></script>
-  <script src="pricing-config.js?v=20260828"></script>
-  <script src="realtime-data.js?v=20260828"></script>
-  <script src="pricing-engine.js?v=20260828"></script>
-  <script src="app.js?v=20260828-dynamic-price"></script>
+  <script src="data/golf-courses.js?v=20260923-verified-master"></script>
+  <script src="data/demo-teetimes.js?v=20260923-demo-only"></script>
+  <script src="data/shared-store.js?v=20261010-specials2"></script>
+  <script src="app.js?v=20261010-specials2"></script>
 </body>
 </html>
