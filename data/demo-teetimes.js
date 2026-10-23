@@ -7,7 +7,8 @@ const demoOverrides = {
 };
 
 const demoSlots = ['06:42','07:18','08:07','12:31','13:20'];
-window.ALL_GOLF_DEMO_COURSES = Object.fromEntries((window.ALL_GOLF_COURSES||[]).map((course,index)=>{
+const demoEligibleCourses=(window.ALL_GOLF_COURSES||[]).filter(course=>course.bookingStatus==='demo'||course.dataMode==='demo');
+window.ALL_GOLF_DEMO_COURSES = Object.fromEntries(demoEligibleCourses.map((course,index)=>{
   const seed=[...course.id].reduce((sum,char)=>sum+char.charCodeAt(0),0);
   const base=95000+(seed%9)*10000;
   const override=demoOverrides[course.id];

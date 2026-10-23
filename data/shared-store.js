@@ -1,17 +1,20 @@
 (function(){
   const OPS_KEY='allGolfOperationsV1';
   const RESERVATION_KEY='allGolfReservations';
+  const MAX_TEAMS_PER_TEE=20;
+  const HOLD_TTL_MS=5*60*1000;
   const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback))}catch{return fallback}};
   const write=(key,value)=>localStorage.setItem(key,JSON.stringify(value));
-  const emptyState=()=>({version:2,teeTimes:{},rates:{},courseOverrides:{},specialOffers:{},updatedAt:null});
-  const state=()=>{const current=read(OPS_KEY,emptyState());return {...emptyState(),...current,teeTimes:current.teeTimes||{},rates:current.rates||{},courseOverrides:current.courseOverrides||{},specialOffers:current.specialOffers||{}}};
+  const emptyState=()=>({version:3,teeTimes:{},rates:{},courseOverrides:{},specialOffers:{},bookingHolds:{},updatedAt:null});
+  const state=()=>{const current=read(OPS_KEY,emptyState());return {...emptyState(),...current,version:3,teeTimes:current.teeTimes||{},rates:current.rates||{},courseOverrides:current.courseOverrides||{},specialOffers:current.specialOffers||{},bookingHolds:current.bookingHolds||{}}};
   const save=value=>{value.updatedAt=new Date().toISOString();write(OPS_KEY,value);window.dispatchEvent(new CustomEvent('allgolf:datachange'));return value};
   const key=(courseId,date)=>`${courseId}::${date}`;
+  const boundedInt=(value,min,max,fallback)=>{const number=Number(value);return Number.isInteger(number)?Math.min(max,Math.max(min,number)):fallback};
   const normalize=(courseId,date,item,index=0)=>({
     id:item.id||`${courseId}::${date}::${item.time}`,courseId,date,time:item.time,
     session:item.session||(+item.time.slice(0,2)<10?'1부':+item.time.slice(0,2)<14?'2부':'3부'),
     price:Number(item.price||0),regular:Number(item.regular||item.price||0),
-    maxPlayers:Number(item.maxPlayers||4),remaining:Number(item.remaining??1),
+    maxPlayers:boundedInt(item.maxPlayers,2,4,4),remaining:boundedInt(item.remaining,0,MAX_TEAMS_PER_TEE,1),capacityTeams:Math.max(boundedInt(item.remaining,0,MAX_TEAMS_PER_TEE,1),boundedInt(item.capacityTeams??item.remaining,0,MAX_TEAMS_PER_TEE,1)),
     closed:Boolean(item.closed),special:Boolean(item.special),instant:item.instant!==false,
     sort:index,updatedAt:item.updatedAt||null
   });
@@ -28,10 +31,12 @@
   const upsertTeeTime=(courseId,date,item)=>{const items=getTeeTimes(courseId,date);const index=items.findIndex(x=>x.id===item.id||x.time===item.time);if(index<0)items.push(item);else items[index]={...items[index],...item};return setTeeTimes(courseId,date,items)};
   const deleteTeeTime=(courseId,date,id)=>setTeeTimes(courseId,date,getTeeTimes(courseId,date).filter(item=>item.id!==id));
   const reserveTee=(courseId,date,time)=>{const items=getTeeTimes(courseId,date);const tee=items.find(x=>x.time===time);if(!tee||tee.closed||tee.remaining<1)return false;tee.remaining-=1;if(tee.remaining===0)tee.closed=true;setTeeTimes(courseId,date,items);return true};
-  const releaseTee=(courseId,date,time)=>{const items=getTeeTimes(courseId,date);const tee=items.find(x=>x.time===time);if(!tee)return false;tee.remaining+=1;tee.closed=false;setTeeTimes(courseId,date,items);return true};
+  const releaseTee=(courseId,date,time)=>{const items=getTeeTimes(courseId,date);const tee=items.find(x=>x.time===time);if(!tee)return false;const capacity=Number(tee.capacityTeams??tee.remaining+1);if(tee.remaining>=capacity)return false;tee.remaining=Math.min(capacity,tee.remaining+1);tee.closed=false;setTeeTimes(courseId,date,items);return true};
   const DEFAULT_CANCELLATION_POLICY={sevenPlus:100,fourToSix:70,twoToThree:50,oneDay:0,sameDay:0};
-  const getRates=courseId=>({weekdayGreenFee:null,weekendGreenFee:null,cartFee:null,caddieFee:null,depositType:null,depositValue:null,cancellationPolicy:{...DEFAULT_CANCELLATION_POLICY},dataMode:'demo',...(state().rates[courseId]||{})});
+  const getRates=courseId=>({weekdayGreenFee:null,weekendGreenFee:null,twoPlayerSurcharge:0,threePlayerSurcharge:0,cartFee:null,caddieFee:null,depositType:null,depositValue:null,cancellationPolicy:{...DEFAULT_CANCELLATION_POLICY},dataMode:'demo',...(state().rates[courseId]||{})});
   const setRates=(courseId,rates)=>{const data=state();data.rates[courseId]={...getRates(courseId),...rates,updatedAt:new Date().toISOString()};save(data);return data.rates[courseId]};
+  const getGreenFeeForDate=(courseId,date,fallback)=>{const rates=getRates(courseId),day=new Date(`${date}T00:00:00`).getDay(),configured=day===0||day===6?rates.weekendGreenFee:rates.weekdayGreenFee;return configured==null||configured===''?Number(fallback||0):Math.max(0,Number(configured)||0)};
+  const getPlayerSurcharge=(courseId,people)=>{const rates=getRates(courseId);return Number(people)===2?Math.max(0,Number(rates.twoPlayerSurcharge||0)):Number(people)===3?Math.max(0,Number(rates.threePlayerSurcharge||0)):0};
   const calculateDeposit=(courseId,totalEstimated,people,fallbackPerPerson=0)=>{
     const rates=getRates(courseId),type=rates.depositType||'person',value=Number(rates.depositValue??fallbackPerPerson??0);
     if(type==='none')return 0;
@@ -109,5 +114,17 @@
     setReservations(items);
     return {ok:true,alreadyCancelled:false,inventoryRestored,reservation:updated};
   };
-  window.ALL_GOLF_STORE={OPS_KEY,RESERVATION_KEY,DEFAULT_CANCELLATION_POLICY,getTeeTimes,setTeeTimes,upsertTeeTime,deleteTeeTime,reserveTee,releaseTee,getRates,setRates,calculateDeposit,calculateCancellation,getCourseOverride,setCourseOverride,getSpecialOffers,getSpecialOffer,getActiveSpecialOffer,applySpecialOffer,validateSpecialOffer,saveSpecialOffer,setSpecialOfferPaused,deleteSpecialOffer,offerStatus,getReservations,setReservations,cancelReservation};
+  const pruneHolds=data=>{const now=Date.now();Object.keys(data.bookingHolds).forEach(teeId=>{const active=(data.bookingHolds[teeId]||[]).filter(hold=>new Date(hold.expiresAt).getTime()>now);if(active.length)data.bookingHolds[teeId]=active;else delete data.bookingHolds[teeId]});return data};
+  const acquireTeeHold=(courseId,date,teeTimeId,ownerId,ttlMs=HOLD_TTL_MS)=>{
+    const tees=getTeeTimes(courseId,date),tee=tees.find(item=>item.id===teeTimeId);if(!tee||tee.closed||tee.remaining<1)return {ok:false,reason:'sold_out'};
+    const data=pruneHolds(state()),list=data.bookingHolds[teeTimeId]||[],existing=list.find(hold=>hold.ownerId===ownerId);
+    if(existing){existing.expiresAt=new Date(Date.now()+ttlMs).toISOString();save(data);return {ok:true,hold:{...existing},reused:true}}
+    if(list.length>=tee.remaining)return {ok:false,reason:'held_by_other'};
+    const hold={id:`hold-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,ownerId,courseId,date,teeTimeId,createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+ttlMs).toISOString()};
+    data.bookingHolds[teeTimeId]=[...list,hold];save(data);return {ok:true,hold:{...hold},reused:false};
+  };
+  const releaseTeeHold=(holdId,ownerId=null)=>{const data=pruneHolds(state());let released=false;Object.keys(data.bookingHolds).forEach(teeId=>{const before=data.bookingHolds[teeId],after=before.filter(hold=>{const match=hold.id===holdId&&(!ownerId||hold.ownerId===ownerId);if(match)released=true;return !match});if(after.length)data.bookingHolds[teeId]=after;else delete data.bookingHolds[teeId]});if(released)save(data);return released};
+  const commitTeeHold=(holdId,ownerId)=>{const data=pruneHolds(state());let hold=null,holdKey='';Object.entries(data.bookingHolds).some(([teeId,list])=>{hold=list.find(item=>item.id===holdId&&item.ownerId===ownerId)||null;if(hold)holdKey=teeId;return Boolean(hold)});if(!hold)return {ok:false,reason:'hold_expired'};const storageKey=key(hold.courseId,hold.date),tees=data.teeTimes[storageKey]||[],tee=tees.find(item=>item.id===hold.teeTimeId);if(!tee||tee.closed||tee.remaining<1)return {ok:false,reason:'sold_out'};tee.remaining-=1;if(tee.remaining===0)tee.closed=true;data.bookingHolds[holdKey]=(data.bookingHolds[holdKey]||[]).filter(item=>item.id!==holdId);if(!data.bookingHolds[holdKey].length)delete data.bookingHolds[holdKey];save(data);return {ok:true,tee:{...tee}}};
+  const getActiveHolds=(courseId,date,teeTimeId)=>{const data=pruneHolds(state());return (data.bookingHolds[teeTimeId]||[]).filter(hold=>hold.courseId===courseId&&hold.date===date).map(hold=>({...hold}))};
+  window.ALL_GOLF_STORE={OPS_KEY,RESERVATION_KEY,DEFAULT_CANCELLATION_POLICY,MAX_TEAMS_PER_TEE,HOLD_TTL_MS,getTeeTimes,setTeeTimes,upsertTeeTime,deleteTeeTime,reserveTee,releaseTee,getRates,setRates,getGreenFeeForDate,getPlayerSurcharge,calculateDeposit,calculateCancellation,getCourseOverride,setCourseOverride,getSpecialOffers,getSpecialOffer,getActiveSpecialOffer,applySpecialOffer,validateSpecialOffer,saveSpecialOffer,setSpecialOfferPaused,deleteSpecialOffer,offerStatus,getReservations,setReservations,cancelReservation,acquireTeeHold,releaseTeeHold,commitTeeHold,getActiveHolds};
 })();

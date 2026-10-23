@@ -1,6 +1,6 @@
-// ALL:GOLF 충청권 골프장 마스터 (검증 기준일: 2026-09-23)
-// 실제 요금/티타임/제휴 여부는 추정하지 않는다. 시연 재고는 demo-teetimes.js에만 둔다.
-window.ALL_GOLF_REGIONS=[{code:'전체',label:'전체'},{code:'충남',label:'충남'},{code:'충북',label:'충북'},{code:'세종',label:'세종'},{code:'대전',label:'대전'}];
+// ALL:GOLF 골프장 마스터 병합 계층.
+// 전국 공식 정보는 national-golf-courses.js, 시연 예약 재고는 demo-teetimes.js에만 둔다.
+window.ALL_GOLF_REGIONS=['전체','서울','경기','인천','강원','충북','충남','대전','세종','전북','전남','광주','경북','경남','대구','울산','부산','제주'].map(code=>({code,label:code}));
 const SRC={kgba:'https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf',kpgca:'https://www.kpgca.co.kr/sub03/sub01.php',kga:'https://www.kgagolf.or.kr/web/handicap/calculator'};
 const rows=[
 ['cn-golden-bay','골든베이 골프&리조트','충남','태안'],['cn-gcz-cheonan','골프존카운티 천안','충남','천안'],['cn-dogo','도고 CC','충남','아산'],['cn-maron','마론 CC','충남','천안'],['cn-baekje','백제 CC','충남','부여'],['cn-boryeong-base','보령베이스 CC','충남','보령'],['cn-buyeo-skyhill','롯데스카이힐 부여 CC','충남','부여'],['cn-seosansu','서산수 골프앤리조트','충남','서산'],['cn-solago','솔라고 CC','충남','태안'],['cn-stonebeach','스톤비치 CC','충남','태안'],['cn-arista','아리스타 CC','충남','논산'],['cn-sg-beautiful','SG아름다운 골프&리조트','충남','아산'],['cn-edinburgh','에딘버러 CC','충남','금산'],['cn-esn','에스앤 CC','충남','보령'],['cn-yemiji','예미지 CC','충남','청양'],['woojeong','우정힐스 CC','충남','천안'],['cn-cheonan-sangnok','천안상록 CC','충남','천안'],['cn-pinestone','파인스톤 CC','충남','당진'],['cn-panacea','파나시아 GC','충남','당진'],['cn-flamingo','플라밍고 CC','충남','당진'],['princess','프린세스 CC','충남','공주'],['cn-royallinks','로얄링스 CC','충남','태안'],['cn-thehill','더힐 CC','충남','논산'],['cn-goldriver','골드리버 CC','충남','공주'],['cn-gyeryongsan','계룡산 CC','충남','공주'],
@@ -55,4 +55,30 @@ add('emerson',{address:'세종특별자치시 전의면 운주산로 1510',opera
 add('sj-lakecastle',{address:'세종특별자치시 전의면 의당전의로 252',operationType:'public',holes:27,courses:['세종','레이','캐슬'],officialWebsite:'https://www.sjraycastle.com/',sources:['https://www.sjraycastle.com/']});
 add('sj-field',{address:'세종특별자치시 정안세종로 1569',operationType:'public',holes:18,courses:['세종','행복'],officialWebsite:'https://www.sejongcc.com/',sources:['https://www.sejongcc.com/']});
 add('dj-yuseong',{address:'대전광역시 유성구 현충원로 200',operationType:'membership',holes:18,officialWebsite:'https://yscc.co.kr/',sources:[SRC.kgba]});
-window.ALL_GOLF_COURSES=rows.map(([id,name,region,city])=>{const x=v[id]||{},operationType=x.operationType||'unknown';const verification={name:true,region:true,city:true,address:Boolean(x.address),operationType:operationType!=='unknown',holes:Number.isFinite(x.holes),courses:Boolean(x.courses?.length),website:Boolean(x.officialWebsite)};return{id,name,region,city,area:city,address:x.address||null,operationType,type:operationType==='membership'?'member':operationType,membershipType:operationType==='membership'?'member':operationType==='unknown'?null:operationType,holes:x.holes??null,courses:x.courses||[],officialWebsite:x.officialWebsite||null,officialBookingUrl:x.officialBookingUrl||null,website:x.officialWebsite||null,operatingStatus:x.sources?.length?'active':'unknown',verified:Object.values(verification).every(Boolean),verification,sources:x.sources||[],source:(x.sources||[])[0]||null,lastVerified:'2026-09-23',lastUpdated:'2026-09',greenFee:null,verifiedGreenFee:null,cartFee:null,caddieFee:null,bookingType:null,bookingStatus:'demo',partner:false,latitude:null,longitude:null,description:'',amenities:[],cancellationPolicy:null,dataMode:'demo'}});
+const localCourses=rows.map(([id,name,region,city])=>{const x=v[id]||{},operationType=x.operationType||'unknown';const verification={name:true,region:true,city:true,address:Boolean(x.address),operationType:operationType!=='unknown',holes:Number.isFinite(x.holes),courses:Boolean(x.courses?.length),website:Boolean(x.officialWebsite)};return{id,name,region,city,area:city,address:x.address||null,operationType,type:operationType==='membership'?'member':operationType,membershipType:operationType==='membership'?'member':operationType==='unknown'?null:operationType,holes:x.holes??null,courses:x.courses||[],officialWebsite:x.officialWebsite||null,officialBookingUrl:x.officialBookingUrl||null,website:x.officialWebsite||null,operatingStatus:x.sources?.length?'active':'unknown',verified:Object.values(verification).every(Boolean),verification,sources:x.sources||[],source:(x.sources||[])[0]||null,lastVerified:'2026-09-23',lastUpdated:'2026-09',greenFee:null,verifiedGreenFee:null,cartFee:null,caddieFee:null,bookingType:'demo',bookingStatus:'demo',partner:false,latitude:null,longitude:null,description:'',amenities:[],cancellationPolicy:null,dataMode:'demo'}});
+
+const nationalCourses=Array.isArray(window.ALL_GOLF_NATIONAL_COURSES)?window.ALL_GOLF_NATIONAL_COURSES:[];
+const normalizeCourseName=name=>String(name||'').toLocaleLowerCase('ko').replace(/(컨트리클럽|골프클럽|골프앤리조트|골프&리조트|리조트|cc|gc|club|플라자)/gi,'').replace(/[^0-9a-z가-힣]/g,'');
+const aliasPairs={
+  'cn-buyeo-skyhill':'롯데스카이힐부여',
+  'cb-grand':'그랜드',
+  'cb-royalfore':'올데이로얄포레',
+  'cb-imperial':'올데이임페리얼레이크'
+};
+const usedNationalIds=new Set();
+const mergedLocal=localCourses.map(local=>{
+  const wanted=normalizeCourseName(aliasPairs[local.id]||local.name);
+  const match=nationalCourses.find(national=>{
+    if(usedNationalIds.has(national.id)||national.region!==local.region)return false;
+    if(local.region!=='세종'&&national.city!==local.city)return false;
+    const candidate=normalizeCourseName(national.name);
+    return candidate===wanted||(candidate.length>=3&&wanted.length>=3&&(candidate.includes(wanted)||wanted.includes(candidate)));
+  });
+  if(!match)return local;
+  usedNationalIds.add(match.id);
+  return {...match,...local,address:local.address||match.address,phone:match.phone||null,memberHoles:match.memberHoles??null,publicHoles:match.publicHoles??null,
+    sources:[...new Set([...(local.sources||[]),...(match.sources||[])])],sourceName:match.sourceName,sourceAsOf:match.sourceAsOf,
+    verification:{...match.verification,...local.verification},bookingStatus:'demo',bookingType:'demo',dataMode:'demo'};
+});
+const nationalOnly=nationalCourses.filter(course=>!usedNationalIds.has(course.id)).map(course=>({...course,area:course.city,type:course.operationType==='membership'?'member':course.operationType,membershipType:course.operationType==='membership'?'member':course.operationType,website:course.officialWebsite||null,greenFee:null,verifiedGreenFee:null,cartFee:null,caddieFee:null,description:'',amenities:[],cancellationPolicy:null}));
+window.ALL_GOLF_COURSES=[...mergedLocal,...nationalOnly];
