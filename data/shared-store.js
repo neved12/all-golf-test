@@ -36,7 +36,7 @@
   const getRates=courseId=>({weekdayGreenFee:null,weekendGreenFee:null,twoPlayerSurcharge:0,threePlayerSurcharge:0,cartFee:null,caddieFee:null,depositType:null,depositValue:null,cancellationPolicy:{...DEFAULT_CANCELLATION_POLICY},dataMode:'demo',...(state().rates[courseId]||{})});
   const setRates=(courseId,rates)=>{const data=state();data.rates[courseId]={...getRates(courseId),...rates,updatedAt:new Date().toISOString()};save(data);return data.rates[courseId]};
   const getGreenFeeForDate=(courseId,date,fallback)=>{const rates=getRates(courseId),day=new Date(`${date}T00:00:00`).getDay(),configured=day===0||day===6?rates.weekendGreenFee:rates.weekdayGreenFee;return configured==null||configured===''?Number(fallback||0):Math.max(0,Number(configured)||0)};
-  const getPlayerSurcharge=(courseId,people)=>{const rates=getRates(courseId);return Number(people)===2?Math.max(0,Number(rates.twoPlayerSurcharge||0)):Number(people)===3?Math.max(0,Number(rates.threePlayerSurcharge||0)):0};
+  const getPlayerSurcharge=(courseId,people,fallback=0)=>{const configured=state().rates[courseId],rates=getRates(courseId);if(Number(people)===2)return configured?Math.max(0,Number(rates.twoPlayerSurcharge||0)):0;if(Number(people)===3)return configured?Math.max(0,Number(rates.threePlayerSurcharge||0)):Math.max(0,Number(fallback||0));return 0};
   const calculateDeposit=(courseId,totalEstimated,people,fallbackPerPerson=0)=>{
     const rates=getRates(courseId),type=rates.depositType||'person',value=Number(rates.depositValue??fallbackPerPerson??0);
     if(type==='none')return 0;
