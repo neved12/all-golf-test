@@ -1557,9 +1557,10 @@ function boot() {
   }
   if (incoming) shareIncoming = { courseId: course?.id, dateISO: calendarDate, people };
   if (params.get('number')) currentReservationId = params.get('number');
-  if (params.get('page') === 'reservations' && currentReservationId) page = 'reservations';
-  else if (['detail', 'booking', 'my'].includes(params.get('page'))) {
-    page = params.get('page');
+  const pageParam = params.get('page');
+  if (pageParam === 'reservations' && currentReservationId) page = 'reservations';
+  else if (['detail', 'booking', 'my', 'list', 'benefits', 'favorites', 'waitlist', 'notifications', 'join', 'lesson', 'travel'].includes(pageParam)) {
+    page = pageParam;
     if (page === 'booking' && !tee) page = 'detail';
   }
 
