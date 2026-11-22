@@ -14,6 +14,7 @@
 .repeat-days{display:flex;flex-wrap:wrap;gap:10px;border:1px solid var(--line);border-radius:9px;margin:18px 0 0;padding:12px;font-size:12px}.repeat-days legend{font-weight:700}.repeat-days label{white-space:nowrap}.modal-actions button:disabled{opacity:.45;cursor:not-allowed}
 
 /* 5단계: 제휴 신청·상태 조회 */
+.apply-card [hidden],.apply-view [hidden]{display:none!important}
 .login-links{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
 .link-btn{border:0;background:none;color:var(--green);font-size:12px;font-weight:700;text-decoration:underline;padding:6px}
 .apply-view .login-card{width:min(100%,720px)}
