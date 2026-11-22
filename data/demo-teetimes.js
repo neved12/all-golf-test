@@ -33,7 +33,7 @@ window.ALL_GOLF_DEMO_COURSES = Object.fromEntries(allCourses.map((course,index)=
     demoDeposit:30000,
     demoNoCaddie:course.id==='princess',
     demoDeal:course.id==='woojeong'||course.id==='emerson'||index%7===0,
-    demoThreePlayerSurcharge:originalDemoIds.has(course.id)?0:10000,
+    demoThreePlayerSurcharge:10000,
     demoNotice:'시연용 예약이며 실제 골프장 예약이 아닙니다'
   }];
 }));

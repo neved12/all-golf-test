@@ -7,24 +7,44 @@
    ============================================================================= */
 
 /* 1. 데이터 ------------------------------------------------------------------ */
-const masterCourses = Array.isArray(window.ALL_GOLF_COURSES) ? window.ALL_GOLF_COURSES : [];
-const demoById = window.ALL_GOLF_DEMO_COURSES || {};
-const courses = masterCourses.map(course => {
-  const demo = demoById[course.id];
-  if (!demo) {
+const partnerStore = window.ALL_GOLF_PARTNER_STORE || null;
+/* 제휴 승인 골프장(기본 68곳 + 승인된 신청)만 시연 예약 가능으로 노출한다.
+   비제휴 골프장은 정보 조회 전용이며, 관리자 승인 즉시 예약 가능 상태로 전환된다. */
+const buildCourseList = () => {
+  const extras = partnerStore ? partnerStore.approvedCourses() : [];
+  const master = Array.isArray(window.ALL_GOLF_COURSES) ? window.ALL_GOLF_COURSES.slice() : [];
+  const demoById = { ...(window.ALL_GOLF_DEMO_COURSES || {}) };
+  extras.forEach(entry => {
+    master.push(entry.course);
+    demoById[entry.course.id] = entry.demo;
+  });
+  return master.map(course => {
+    const demo = demoById[course.id];
+    const partnered = partnerStore ? partnerStore.isPartnerCourse(course.id) : Boolean(demo);
+    if (!demo || !partnered) {
+      return {
+        ...course, area: course.city, bookable: false, demo: false, partnered, demoPrice: null, price: null,
+        cart: null, caddie: null, deposit: null, noCaddie: false, deal: false, times: [], rating: null, reviews: null
+      };
+    }
     return {
-      ...course, area: course.city, bookable: false, demo: false, demoPrice: null, price: null,
-      cart: null, caddie: null, deposit: null, noCaddie: false, deal: false, times: [], rating: null, reviews: null
+      ...course, ...demo, area: course.city, bookable: true, demo: true, partnered: true,
+      demoPrice: demo.demoGreenFee, price: demo.demoGreenFee, cart: demo.demoCartFee, caddie: demo.demoCaddieFee,
+      deposit: demo.demoDeposit, noCaddie: demo.demoNoCaddie, deal: demo.demoDeal, times: demo.demoTeeTimes,
+      rating: null, reviews: null
     };
+  });
+};
+let courses = buildCourseList();
+let demoCourses = courses.filter(course => course.demo);
+/* 다른 탭에서 제휴 신청이 승인되면 새로고침 없이 목록을 다시 만든다. */
+const refreshPartnerCourses = () => {
+  courses = buildCourseList();
+  demoCourses = courses.filter(item => item.demo);
+  if (!course || !courses.some(item => item.id === course.id)) {
+    course = courses.find(item => item.id === 'woojeong') || demoCourses[0] || courses[0];
   }
-  return {
-    ...course, ...demo, area: course.city, bookable: true, demo: true,
-    demoPrice: demo.demoGreenFee, price: demo.demoGreenFee, cart: demo.demoCartFee, caddie: demo.demoCaddieFee,
-    deposit: demo.demoDeposit, noCaddie: demo.demoNoCaddie, deal: demo.demoDeal, times: demo.demoTeeTimes,
-    rating: null, reviews: null
-  };
-});
-const demoCourses = courses.filter(course => course.demo);
+};
 const regionOptions = window.ALL_GOLF_REGIONS || [{ code: '전체', label: '전체' }];
 const shared = window.ALL_GOLF_STORE;
 const root = document.querySelector('#app');
@@ -132,7 +152,10 @@ const timeMinutes = time => {
 const sessionLabel = value => value === 'all' ? '전체' : value;
 
 /* 시연 티타임 (기존 데이터 경로 그대로) */
-const demoTimesForDate = (item, iso) => window.ALL_GOLF_DEMO_FOR_DATE ? window.ALL_GOLF_DEMO_FOR_DATE(item.id, iso) : item.times;
+const demoTimesForDate = (item, iso) => {
+  if (item?.partnerDemo && partnerStore?.demoTimesFor) return partnerStore.demoTimesFor(item.id, iso);
+  return window.ALL_GOLF_DEMO_FOR_DATE ? window.ALL_GOLF_DEMO_FOR_DATE(item.id, iso) : item.times;
+};
 const rawTimesFor = (item, iso = calendarDate) => item?.demo
   ? (shared ? shared.getTeeTimes(item.id, iso, demoTimesForDate(item, iso)) : demoTimesForDate(item, iso))
   : [];
@@ -528,7 +551,7 @@ function list() {
       <label>시·군<select id="result-city"><option value="">전체 시·군</option>${citiesFor(region).map(value => `<option value="${esc(value)}" ${city === value ? 'selected' : ''}>${esc(value)}</option>`).join('')}</select></label>
       <label>운영형태<select id="operation-filter"><option value="all">전체</option><option value="public" ${operationFilter === 'public' ? 'selected' : ''}>대중제</option><option value="membership" ${operationFilter === 'membership' ? 'selected' : ''}>회원제</option><option value="mixed" ${operationFilter === 'mixed' ? 'selected' : ''}>혼합형</option></select></label>
       <label>홀 수<select id="holes-filter"><option value="all">전체</option><option value="9" ${holesFilter === '9' ? 'selected' : ''}>9홀</option><option value="18" ${holesFilter === '18' ? 'selected' : ''}>18홀</option><option value="27" ${holesFilter === '27' ? 'selected' : ''}>27홀</option><option value="36plus" ${holesFilter === '36plus' ? 'selected' : ''}>36홀 이상</option></select></label>
-      <label>조회 범위<select id="availability-filter"><option value="all">전체 골프장</option><option value="bookable" ${availabilityFilter === 'bookable' ? 'selected' : ''}>시연 예약 가능</option></select></label>
+      <label>조회 범위<select id="availability-filter"><option value="all">전체 골프장</option><option value="bookable" ${availabilityFilter === 'bookable' ? 'selected' : ''}>제휴 예약 가능</option></select></label>
     </div>
     <div class="compare-filters">
       <label>최소 1인 가격<input id="min-price" type="number" inputmode="numeric" min="0" value="${esc(minPrice)}" placeholder="원"></label>
@@ -550,6 +573,18 @@ function list() {
 
 function listCard(item) {
   const saved = favorites().includes(item.id);
+  if (!item.bookable) {
+    return `<article class="list-card info-only">
+      <div class="list-image info" aria-hidden="true">⛳</div>
+      <div class="list-info">
+        <div class="card-title"><h3 data-course="${item.id}">${esc(item.name)}</h3><button class="heart ${saved ? 'saved' : ''}" data-favorite="${item.id}" aria-label="찜하기">${saved ? '♥' : '♡'}</button></div>
+        <p>${esc(item.region)} · ${esc(item.city)} · ${holeLabel(item)} · ${typeLabel(item)}</p>
+        <div class="list-price"><strong>ALL:GOLF 예약 미지원</strong><span>골프장 정보만 제공</span></div>
+        <small class="demo-warning">제휴 승인 후 시연 예약이 열립니다.</small>
+        <div class="card-actions"><button class="outline" data-course="${item.id}">상세보기</button><a class="outline partner-link" href="partner/#apply:${item.id}">제휴 신청</a></div>
+      </div>
+    </article>`;
+  }
   const slots = openTimesFor(item);
   const eligible = slots.filter(slot => (!minPrice || slot.price >= Number(minPrice))
     && (!maxPrice || slot.price <= Number(maxPrice))
@@ -560,7 +595,7 @@ function listCard(item) {
   return `<article class="list-card">
     <div class="list-image" aria-hidden="true">⛳</div>
     <div class="list-info">
-      <div class="card-title"><h3 data-course="${item.id}">${esc(item.name)}</h3><button class="heart ${saved ? 'saved' : ''}" data-favorite="${item.id}" aria-label="찜하기">${saved ? '♥' : '♡'}</button></div>
+      <div class="card-title"><h3 data-course="${item.id}">${esc(item.name)}</h3>${item.partnered ? '<span class="partner-chip">제휴</span>' : ''}<button class="heart ${saved ? 'saved' : ''}" data-favorite="${item.id}" aria-label="찜하기">${saved ? '♥' : '♡'}</button></div>
       <p>${esc(item.region)} · ${esc(item.city)} · ${holeLabel(item)} · ${typeLabel(item)}</p>
       <div class="list-price">${cheapest?.specialOffer ? `<strong><s>${won(cheapest.regularPrice)}</s> ${won(cheapest.price)} / 1인</strong><span class="special-badge">특가 ${cheapest.specialOffer.discountRate}%</span>` : `<strong>${won(cheapest?.price)} / 1인</strong><span>시연 가격</span>`}</div>
       ${highlights.length ? `<div class="slot-chips">${highlights.map(slot => `<button class="slot-chip" data-slot-course="${item.id}" data-slot-date="${calendarDate}" data-slot-time="${slot.id}"><b>${slot.time}</b>${won(slot.price).replace('원', '')}<i>${slot.remaining}팀</i></button>`).join('')}</div>` : ''}
@@ -585,7 +620,7 @@ function detail() {
   if (!course.bookable) {
     return `${header}
     <div class="course-hero photo-slide info-hero"><span>전국 골프장 정보</span><small>${esc(course.region)} ${esc(course.city)} · ${holeLabel(course)}</small></div>
-    <section class="course-overview"><b>${esc(course.name)}</b><span class="info-badge">ALL:GOLF 예약 미지원</span><span>📍 ${esc(course.address || `${course.region} ${course.city} · 상세 주소 확인 필요`)} · ${holeLabel(course)} · ${typeLabel(course)}</span><p>현재는 골프장 정보만 제공합니다. 확인되지 않은 가격이나 티타임은 표시하지 않습니다.</p><div class="detail-links"><button data-map>지도보기</button><button data-share-course="${course.id}">공유하기</button></div></section>
+    <section class="course-overview"><b>${esc(course.name)}</b><span class="info-badge">ALL:GOLF 예약 미지원</span><span>📍 ${esc(course.address || `${course.region} ${course.city} · 상세 주소 확인 필요`)} · ${holeLabel(course)} · ${typeLabel(course)}</span><p>현재는 골프장 정보만 제공합니다. 확인되지 않은 가격이나 티타임은 표시하지 않습니다.</p><div class="detail-links"><button data-map>지도보기</button><button data-share-course="${course.id}">공유하기</button><a class="partner-link" href="partner/#apply:${course.id}">이 골프장 제휴 신청</a></div></section>
     <section class="course-info-card" id="course-info"><h2>골프장 정보</h2><dl><div><dt>주소</dt><dd>${esc(course.address || '확인 필요')}</dd></div><div><dt>운영형태</dt><dd>${typeLabel(course)}</dd></div><div><dt>총 홀 수</dt><dd>${holeLabel(course)}</dd></div><div><dt>코스명</dt><dd>${esc(courseNames)}</dd></div><div><dt>대표 전화</dt><dd>${esc(course.phone || '확인 필요')}</dd></div><div><dt>예약 지원</dt><dd>현재 ALL:GOLF 예약 미지원</dd></div></dl>${course.officialWebsite ? `<a class="official-link" href="${course.officialWebsite}" target="_blank" rel="noopener noreferrer">공식 홈페이지</a>` : ''}</section>
     <section class="course-info-card"><h2>정보 출처</h2><p>${esc(course.sourceName || '공개 자료')}</p><p>자료 기준일 ${esc(course.sourceAsOf || course.lastVerified || '확인 필요')}</p>${course.source ? `<a class="official-link" href="${course.source}" target="_blank" rel="noopener noreferrer">출처 확인</a>` : ''}<small class="source-disclaimer">출처 기준일 이후 운영 정보가 변경되었을 수 있습니다. 방문 전 골프장 공식 채널에서 확인해주세요.</small></section>
     <section class="info-box"><h3>예약 안내</h3><p>이 골프장은 전국 정보 검색 대상이며 ALL:GOLF의 실제 또는 시연 예약 재고가 연결되어 있지 않습니다.</p></section>`;
@@ -597,7 +632,7 @@ function detail() {
   <div class="course-hero photo-slide"><span>시연용 예약 화면</span><small>${esc(course.region)} ${esc(course.city)} · ${holeLabel(course)}</small></div>
 
   <section class="course-overview key-info">
-    <div class="key-row"><b>${esc(course.name)}</b><span class="demo-chip">시연용</span></div>
+    <div class="key-row"><b>${esc(course.name)}</b><span class="demo-chip">시연용</span>${course.partnered ? '<span class="partner-chip">ALL:GOLF 제휴</span>' : ''}</div>
     <span>📍 ${esc(course.address || `${course.region} ${course.city} · 상세 주소 확인 필요`)}</span>
     <div class="key-chips"><span>${typeLabel(course)}</span><span>${holeLabel(course)}</span><span>${esc(course.city)}</span></div>
     <div class="detail-links"><button data-map>지도보기</button><button data-share-course="${course.id}">공유하기</button><button data-go="favorites">찜한 골프장</button></div>
@@ -1038,6 +1073,7 @@ function benefits() {
   <section class="benefit-section member-benefit"><div class="section-head"><div><div class="kicker">회원 전용</div><h2>ALL:GOLF 회원 혜택</h2></div></div><ul><li><b>첫 예약 할인</b><span>첫 예약 시 10,000원 자동 할인 (샘플)</span></li><li><b>조인 수수료 할인</b><span>회원 전용 조인 제휴 혜택 · 준비 중</span></li><li><b>취소티 우선 알림</b><span>원하는 티타임을 빠르게 만나보세요</span></li></ul></section>
   <section class="benefit-section"><div class="section-head"><h2>진행 중인 이벤트</h2><span class="soon">샘플</span></div><div class="event-grid"><article class="event-card invite"><span>초대 이벤트</span><h3>친구 초대 이벤트</h3><p>친구가 첫 예약을 완료하면 <br>나도 친구도 20,000원 할인 (샘플)</p><button data-benefit="invite">자세히 보기</button></article><article class="event-card summer"><span>8월 한정</span><h3>여름 라운드 특가</h3><p>제휴 골프장 최대 30% 할인 (샘플)</p><button data-benefit="summer">혜택 확인</button></article></div></section>
   <section class="benefit-section"><div class="section-head"><h2>제휴 혜택</h2><span class="soon">준비 중</span></div><div class="partner-benefit"><article><i>⛳</i><b>골프장 제휴 할인</b><span>준비 중입니다</span></article><article><i>👟</i><b>골프용품 할인</b><span>준비 중입니다</span></article><article><i>✈</i><b>골프여행 특별가</b><span>준비 중입니다</span></article></div></section>
+  <section class="benefit-section partner-invite"><div><div class="kicker">골프장 담당자</div><h2>ALL:GOLF 제휴 신청</h2><p>제휴를 신청하면 접수번호로 진행 상태를 확인할 수 있고, 본사 승인 후 이 앱에서 바로 시연 예약이 열립니다.</p></div><a class="primary partner-invite-link" href="partner/#apply">제휴 신청하기</a></section>
   <p class="footer-note">${fullDemoNotice}</p>`;
 }
 
@@ -1580,8 +1616,10 @@ function boot() {
 
   window.addEventListener('storage', event => {
     if (event.key === shared?.OPS_KEY || event.key === shared?.RESERVATION_KEY) render();
+    if (partnerStore && event.key === partnerStore.KEY) { refreshPartnerCourses(); render(); }
   });
   window.addEventListener('allgolf:datachange', render);
+  window.addEventListener('allgolf:partnerschange', () => { refreshPartnerCourses(); render(); });
   window.addEventListener('allgolf:reservationschange', () => { if (page === 'my' || page === 'reservations' || page === 'waitlist') render(); });
 
   render();

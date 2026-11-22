@@ -14,7 +14,9 @@ const files = [
   'data/national-golf-courses.js',
   'data/golf-courses.js',
   'data/demo-teetimes.js',
+  'data/partner-application.js',
   'data/shared-store.js',
+  'demo-transfer.js',
   'app.js',
   'tests/scenarios.js'
 ];
