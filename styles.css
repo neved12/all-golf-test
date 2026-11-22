@@ -75,7 +75,9 @@ main { padding:0 19px 25px; }.greeting{font-size:13px;color:var(--muted);margin:
    - 360 / 390 / 430px 기준 반응형
    ============================================================================= */
 :root { --nav-h:64px; --radius:16px; }
-html, body { overflow-x:hidden; }
+/* overflow-x:hidden 은 스크롤 컨테이너를 만들어 sticky(상단 바·하단 결제 바)를 깨뜨린다.
+   넘침은 레이아웃에서 제거했고, 방어용으로 clip 을 쓴다. */
+html, body { overflow-x:clip; }
 body { -webkit-text-size-adjust:100%; }
 .app-shell { width:100%; max-width:430px; min-height:100dvh; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 22px); }
 @media (min-width:520px) { .app-shell { min-height:100dvh; } }
