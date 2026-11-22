@@ -856,7 +856,7 @@ function reservationPage() {
   const onsite = Number(reservation.onsite ?? Math.max(0, total - deposit));
   const deadlineText = cancelInfo?.deadlineAt
     ? new Date(cancelInfo.deadlineAt).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '취소 기한 제한 없음(시연 정책)';
+    : '별도 기한 없음 · 날짜별 환불률 적용';
 
   return `<div class="detail-top"><button class="back" data-go="my" aria-label="뒤로">‹</button><h1>예약 상세</h1><div class="detail-actions"><button data-share-reservation="${reservation.number || reservation.id}" aria-label="공유하기">⤴</button></div></div>
   <article class="reservation-detail-card">

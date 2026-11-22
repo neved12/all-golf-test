@@ -20,11 +20,14 @@
 </head>
 <body>
   <h1>ALL:GOLF 반응형 점검</h1>
-  <p class="desc">360 / 390 / 430px 폭에서 앱을 띄우고 가로 넘침(scrollWidth &gt; innerWidth)과 주요 요소 폭을 확인합니다. 앱은 iframe에서 실제로 실행됩니다.</p>
+  <p class="desc">360 / 390 / 430px 폭에서 앱을 띄우고 가로 넘침(scrollWidth &gt; innerWidth)과 주요 요소 폭을 확인합니다. 앱은 iframe에서 실제로 실행됩니다.<br>
+  특정 화면을 점검하려면 <code>?q=page%3Dlist</code> 처럼 앱 쿼리를 붙입니다. (예: 예약 상세 <code>?q=page%3Dreservations%26number%3DAG-...</code>)</p>
   <div id="summary">측정 중…</div>
   <div class="frames" id="frames"></div>
   <script>
     var widths = [360, 390, 430];
+    var extraQuery = new URLSearchParams(location.search).get('q') || '';
+    var appSrc = '../index.html' + (extraQuery ? '?' + extraQuery : '');
     var frames = document.getElementById('frames');
     var summary = document.getElementById('summary');
     var results = [];
@@ -65,7 +68,7 @@
       var frame = document.createElement('iframe');
       frame.width = width;
       frame.height = 720;
-      frame.src = '../index.html';
+      frame.src = appSrc;
       holder.appendChild(title);
       holder.appendChild(frame);
       frames.appendChild(holder);
