@@ -271,3 +271,11 @@ main { padding:0 18px 30px; }
 .list-info .slot-chip i { color:#7d918b; font-size:9px; }
 .field-error[hidden] { display:none; }
 .refund-table { margin:8px 0 2px; font-size:10px; color:var(--muted); line-height:1.6; }
+
+/* 목록/정렬 스크롤 영역 다듬기 */
+.chips { scrollbar-width:none; }
+.chips::-webkit-scrollbar { display:none; }
+.sort-row { flex-wrap:wrap; row-gap:8px; }
+.sort-row .chips { flex:1 1 100%; order:2; }
+.sort-row .filter-reset { order:1; margin-left:auto; }
+.slot-chips { mask-image:linear-gradient(to right, #000 86%, transparent 100%); -webkit-mask-image:linear-gradient(to right, #000 86%, transparent 100%); }
