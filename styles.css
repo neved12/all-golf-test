@@ -268,3 +268,4 @@ main { padding:0 18px 30px; }
 .list-info .slot-chip b { color:#064f3d; font-size:12px; }
 .list-info .slot-chip i { color:#7d918b; font-size:9px; }
 .field-error[hidden] { display:none; }
+.refund-table { margin:8px 0 2px; font-size:10px; color:var(--muted); line-height:1.6; }

@@ -854,6 +854,7 @@ function reservationPage() {
   const total = Number(reservation.totalEstimated || 0);
   const deposit = Number(reservation.paidDeposit ?? reservation.online ?? 0);
   const onsite = Number(reservation.onsite ?? Math.max(0, total - deposit));
+  const refundPolicy = { ...(shared?.DEFAULT_CANCELLATION_POLICY || {}), ...(reservation.cancellationPolicySnapshot || {}) };
   const deadlineText = cancelInfo?.deadlineAt
     ? new Date(cancelInfo.deadlineAt).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '별도 기한 없음 · 날짜별 환불률 적용';
@@ -892,6 +893,7 @@ function reservationPage() {
       : `<p class="res-line"><span>취소 가능 기한</span><b>${deadlineText}</b></p>
          <p class="res-line"><span>지금 취소하면</span><b>환불 ${won(cancelInfo?.refundAmount || 0)} (${cancelInfo?.refundRate || 0}%)</b></p>
          <p class="res-line"><span>예상 취소 수수료</span><b>${won(cancelInfo?.cancellationFee || 0)}</b></p>
+         <p class="refund-table">환불률 · 7일 전 ${refundPolicy?.sevenPlus ?? 100}% · 4~6일 전 ${refundPolicy?.fourToSix ?? 70}% · 2~3일 전 ${refundPolicy?.twoToThree ?? 50}% · 1일 전 ${refundPolicy?.oneDay ?? 0}% · 당일 ${refundPolicy?.sameDay ?? 0}%</p>
          <small class="source-disclaimer">시연용 정책으로 계산한 금액이며 실제 환불이 아닙니다.</small>`}
   </section>
 
