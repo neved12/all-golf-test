@@ -285,11 +285,126 @@
     ok('혜택 쿠폰은 샘플로 구분', benefits().includes('샘플'));
   }
 
+
+  /* ---------------------------------------------------------------- */
+  /* 5단계: 골프장 제휴 신청·승인 */
+  function scenarioPartnerApplication() {
+    section('5단계 · 제휴 신청 접수');
+    resetState();
+    const api = window.ALL_GOLF_PARTNER_STORE;
+    ok('제휴 신청 저장소 로드', Boolean(api));
+    if (!api) return;
+    ok('기본 제휴 골프장 68곳 유지', api.defaultPartnerIds().length === 68, api.defaultPartnerIds().length);
+    ok('비제휴 골프장 176곳 신청 대상', api.availableCourses().length === 176, api.availableCourses().length);
+    const target = api.availableCourses()[0];
+    ok('비제휴 골프장은 제휴 아님', Boolean(target) && !api.isPartnerCourse(target.id), target?.name);
+    ok('비제휴 골프장은 시연 예약 불가', courses.find(item => item.id === target.id)?.bookable === false);
+
+    const invalid = api.submit({ courseMode: 'existing', courseId: target.id, managerName: '김', managerPhone: '1234', managerEmail: 'not-an-email', agree: false });
+    ok('담당자 형식·동의 검증', invalid.ok === false && Boolean(invalid.errors.managerPhone) && Boolean(invalid.errors.managerEmail) && Boolean(invalid.errors.agree), invalid.message);
+    const missing = api.submit({ courseMode: 'existing', courseId: '', managerName: '김담당', managerPhone: '010-1111-2222', managerEmail: 'a@b.co', agree: true });
+    ok('골프장 미선택 검증', missing.ok === false && Boolean(missing.errors.courseId), missing.message);
+
+    const first = api.submit({ courseMode: 'existing', courseId: target.id, managerName: '김담당', managerPhone: '010-1234-5678', managerEmail: 'partner@example.com', agree: true, weekdayGreenFee: '160000', cartFee: '110000', memo: '주말 2인 플레이 가능' });
+    ok('기존 골프장 제휴 신청 접수', first.ok === true, first.message);
+    ok('접수번호 형식', /^PA-\d{6}-\d{4}$/.test(first.application?.id || ''), first.application?.id);
+    eq('신청 상태 검토 대기', first.application?.status, 'pending');
+    eq('담당자 휴대전화 보존', first.application?.manager?.phone, '010-1234-5678');
+
+    const duplicate = api.submit({ courseMode: 'existing', courseId: target.id, managerName: '김담당', managerPhone: '010-1234-5678', managerEmail: 'partner@example.com', agree: true });
+    ok('같은 골프장 중복 신청 차단', duplicate.ok === false && /이미 검토 중인 신청/.test(duplicate.message), duplicate.message);
+    eq('접수번호로 상태 조회', api.statusOf(first.application.id)?.status, 'pending');
+    eq('검토 대기 건수 집계', api.stats().pending, 1);
+
+    const created = api.submit({ courseMode: 'new', courseName: '테스트 힐스 CC', region: '경기', city: '용인', holes: '18', managerName: '박신청', managerPhone: '010-2222-3333', managerEmail: 'new@example.com', agree: true, weekdayGreenFee: '175000' });
+    ok('신규 골프장 신청 접수', created.ok === true, created.message);
+    ok('신규 골프장 내부 ID 생성', /^ap-/.test(created.application?.newCourseId || ''), created.application?.newCourseId);
+    const duplicateName = api.submit({ courseMode: 'new', courseName: '테스트 힐스 CC', region: '경기', city: '용인', managerName: '박신청', managerPhone: '010-2222-3333', managerEmail: 'new@example.com', agree: true });
+    ok('같은 이름 신규 신청 차단', duplicateName.ok === false && /이미 검토 중인 신청/.test(duplicateName.message), duplicateName.message);
+    const registered = api.availableCourses()[0];
+    const duplicateMaster = api.submit({ courseMode: 'new', courseName: registered.name, region: registered.region, city: registered.city, managerName: '박신청', managerPhone: '010-2222-3333', managerEmail: 'new@example.com', agree: true });
+    ok('이미 등록된 골프장명은 신규 신청 차단', duplicateMaster.ok === false && /이미 등록된 골프장/.test(duplicateMaster.message), duplicateMaster.message);
+    ok('승인 전 신규 골프장은 사용자 앱에 없음', !courses.some(item => item.name === '테스트 힐스 CC'));
+    eq('홀 수 형식 오류 안내', api.submit({ courseMode: 'new', courseName: '홀수 테스트 CC', region: '경기', city: '이천', holes: '5', managerName: '박신청', managerPhone: '010-2222-3333', managerEmail: 'new@example.com', agree: true }).errors.holes ? true : false, true);
+  }
+
+  function scenarioPartnerApproval() {
+    section('5단계 · 승인·반려 반영');
+    resetState();
+    const api = window.ALL_GOLF_PARTNER_STORE;
+    if (!api) return ok('제휴 신청 저장소 로드', false);
+    const existing = api.availableCourses()[0];
+    const request = api.submit({ courseMode: 'existing', courseId: existing.id, managerName: '김담당', managerPhone: '010-1234-5678', managerEmail: 'partner@example.com', agree: true, weekdayGreenFee: '160000' });
+    const newRequest = api.submit({ courseMode: 'new', courseName: '승인 힐스 CC', region: '경기', city: '여주', holes: '18', managerName: '박신청', managerPhone: '010-2222-3333', managerEmail: 'new@example.com', agree: true, weekdayGreenFee: '175000' });
+    const rejected = api.submit({ courseMode: 'new', courseName: '반려 CC', region: '강원', city: '춘천', managerName: '이반려', managerPhone: '010-4444-5555', managerEmail: 're@example.com', agree: true });
+
+    ok('반려 사유 없으면 거부', api.reject(rejected.application.id, {}).ok === false);
+    const rejectedResult = api.reject(rejected.application.id, { reason: '사업자 정보 확인 불가' });
+    ok('반려 처리', rejectedResult.ok === true && rejectedResult.application.status === 'rejected');
+    eq('반려 사유 저장', api.statusOf(rejected.application.id)?.decision?.reason, '사업자 정보 확인 불가');
+    ok('반려된 골프장은 제휴 아님', !api.isPartnerCourse(rejected.application.newCourseId));
+    ok('반려 후 재처리 차단', api.approve(rejected.application.id, {}).ok === false);
+
+    const approved = api.approve(request.application.id, { memo: '서류 확인 완료' });
+    ok('기존 골프장 승인', approved.ok === true, approved.message);
+    ok('승인 후 제휴 골프장 전환', api.isPartnerCourse(existing.id));
+    eq('관리자 제휴 현황도 제휴 완료', JSON.parse(localStorage.getItem('allGolfPartnershipStatusV1') || '{}')[existing.id]?.status, 'complete');
+    refreshPartnerCourses();
+    const reflected = courses.find(item => item.id === existing.id);
+    ok('사용자 앱 예약 가능 전환', reflected?.bookable === true && reflected?.partnered === true);
+    ok('전환 후 시연 티타임 생성', openTimesFor(reflected, shiftISO(todayISO, 3)).length > 0);
+    ok('제휴 예약 필터에 포함', courses.filter(item => item.bookable).some(item => item.id === existing.id));
+
+    ok('신규 골프장 승인', api.approve(newRequest.application.id, {}).ok === true);
+    refreshPartnerCourses();
+    const created = courses.find(item => item.id === newRequest.application.newCourseId);
+    ok('신규 골프장이 사용자 앱에 등록', Boolean(created) && created.name === '승인 힐스 CC');
+    ok('신규 골프장 예약 가능', created?.bookable === true);
+    eq('신청한 평일 그린피 반영', created?.demoGreenFee, 175000);
+    ok('신규 골프장 티타임 생성', openTimesFor(created, shiftISO(todayISO, 4)).length > 0);
+
+    const iso = shiftISO(todayISO, 4);
+    const slot = openTimesFor(created, iso)[0];
+    prepare(created, iso, slot, 4);
+    fillForm('신규예약', '010-3333-4444');
+    reserve();
+    const reservation = payAndConfirm();
+    ok('승인된 신규 골프장 예약 완료', Boolean(reservation), reservation?.number);
+    eq('예약에 승인 골프장 ID 저장', reservation?.courseId, created?.id);
+    eq('승인 건수 집계', api.stats().approved, 2);
+    const partnerIds = window.ALL_GOLF_COURSES.filter(item => api.isPartnerCourse(item.id)).map(item => item.id);
+    ok('골프장 관리자 화면 운영 대상 포함', partnerIds.includes(existing.id));
+    ok('승인 신규 골프장도 운영 대상 포함', api.isPartnerCourse(created.id));
+  }
+
+  function scenarioPartnerBackup() {
+    section('5단계 · 시연 백업 연동');
+    resetState();
+    const api = window.ALL_GOLF_PARTNER_STORE, transfer = window.ALL_GOLF_DEMO_TRANSFER;
+    ok('시연 백업 도구 로드', Boolean(transfer));
+    if (!api || !transfer) return;
+    const request = api.submit({ courseMode: 'new', courseName: '백업 힐스 CC', region: '경기', city: '이천', managerName: '김담당', managerPhone: '010-1234-5678', managerEmail: 'partner@example.com', agree: true, memo: '자유 입력 메모', weekdayGreenFee: '160000' });
+    api.approve(request.application.id, { memo: '내부 승인 메모' });
+    const backup = transfer.createBackup();
+    const saved = (backup.data.allGolfPartnerApplicationsV1 || [])[0];
+    ok('백업에 제휴 신청 키 포함', Array.isArray(backup.data.allGolfPartnerApplicationsV1) && backup.data.allGolfPartnerApplicationsV1.length === 1);
+    ok('백업에서 담당자 연락처 제외', saved && saved.manager.phone === '' && saved.manager.email === '');
+    ok('백업에서 자유 입력 메모 제외', saved && saved.conditions.memo === '');
+    eq('승인 상태 보존', saved?.status, 'approved');
+    const parsed = transfer.parse(JSON.stringify(backup));
+    eq('복원 파싱 신청 건수', parsed.allGolfPartnerApplicationsV1.length, 1);
+    localStorage.setItem('allGolfPartnerApplicationsV1', JSON.stringify(parsed.allGolfPartnerApplicationsV1));
+    ok('복원된 승인 신청 반영', api.isPartnerCourse(parsed.allGolfPartnerApplicationsV1[0].newCourseId));
+    const summary = transfer.createBackup();
+    ok('백업 요약 문구 없음(데이터만)', typeof summary.data === 'object');
+  }
+
   function runAll() {
     const scenarios = [
       scenarioData, scenarioFourPlayers, scenarioThreePlayers, scenarioSpecialOffer,
       scenarioWaitAndCancel, scenarioPhoneValidation, scenarioCalendarAndShare,
-      scenarioRevisit, scenarioReservationDetail, scenarioReadyScreens
+      scenarioRevisit, scenarioReservationDetail, scenarioReadyScreens,
+      scenarioPartnerApplication, scenarioPartnerApproval, scenarioPartnerBackup
     ];
     scenarios.forEach(scenario => {
       try {

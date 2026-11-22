@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const FORMAT = 'all-golf-demo-backup';
-  const KEYS = ['allGolfReservations', 'allGolfOperationsV1', 'allGolfPartners', 'allGolfPartnerTeeTimes', 'allGolfPartnershipStatusV1'];
+  const KEYS = ['allGolfReservations', 'allGolfOperationsV1', 'allGolfPartners', 'allGolfPartnerTeeTimes', 'allGolfPartnershipStatusV1', 'allGolfPartnerApplicationsV1'];
   const catalog = new Map((window.ALL_GOLF_COURSES || []).map(c => [c.id, c]));
   const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -65,10 +65,34 @@
     return out;
   };
   const partner = x => ({...fields(x,{id,fee:number,cycle:choice(['매월 15일','매월 말일']),created:date,status:choice(['정상 운영','심사 중','중지','해지'])},['id']),name:'시연 제휴 골프장',manager:'',phone:'',region:''});
+  /* 제휴 신청: 담당자 이름·연락처·이메일과 자유 입력 메모는 개인정보이므로 백업에서 제외한다. */
+  const shortText = max => x => { if (typeof x !== 'string' || x.length > max) fail('문자열 형식이 올바르지 않습니다.'); return x; };
+  const application = x => {
+    const out = fields(x, {
+      id: v => typeof v === 'string' && /^PA-\d{6}-\d{4}$/.test(v) ? v : fail('제휴 신청 접수번호 형식이 올바르지 않습니다.'),
+      status: choice(['pending','approved','rejected']),
+      courseMode: choice(['existing','new']),
+      courseId: id,
+      newCourseId: id,
+      course: v => fields(v,{name:shortText(60),region:shortText(10),city:shortText(30),address:shortText(120),phone:shortText(30),website:shortText(160),holes:shortText(4),operationType:choice(['public','membership','mixed'])}),
+      conditions: v => fields(v,{...moneyFields('weekdayGreenFee weekendGreenFee cartFee caddieFee teeInterval'),memo:shortText(500)}),
+      decision: v => fields(v,{at:stamp,by:shortText(40),memo:shortText(500),reason:shortText(500)}),
+      createdAt: stamp,
+      updatedAt: stamp,
+      agreeAt: stamp,
+      dataMode: choice(['demo'])
+    }, ['id','status','courseMode','createdAt']);
+    out.manager = { name: '시연 신청자', role: '', phone: '', email: '' };
+    out.course = {...(out.course||{}), name: (out.course&&out.course.name)||'시연 신청 골프장'};
+    out.conditions = {...(out.conditions||{}), memo: ''};
+    out.decision = out.decision ? {...out.decision, memo: '', reason: out.decision.reason||''} : null;
+    return out;
+  };
   const cleaners = {
     allGolfReservations:x => list(x,reservation), allGolfOperationsV1:operations,
     allGolfPartners:x => list(x,partner), allGolfPartnerTeeTimes:x => list(x,tee),
-    allGolfPartnershipStatusV1:x => map(x,v => ({...fields(v,{status:choice(['unknown','none','talking','complete']),updatedAt:stamp},['status']),note:''}),course)
+    allGolfPartnershipStatusV1:x => map(x,v => ({...fields(v,{status:choice(['unknown','none','talking','complete']),updatedAt:stamp},['status']),note:''}),course),
+    allGolfPartnerApplicationsV1:x => list(x,application).sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)))
   };
   function cleanData(data) {
     record(data); const out = {};
@@ -98,11 +122,11 @@
     const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json;charset=utf-8'}));
     const a=document.createElement('a');a.href=url;a.download=prefix+'-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  const summary = data => `예약 ${(data.allGolfReservations||[]).length}건 · 티타임 ${Object.values(data.allGolfOperationsV1?.teeTimes||{}).reduce((n,v)=>n+v.length,0)}개 · 특가 ${Object.keys(data.allGolfOperationsV1?.specialOffers||{}).length}건 · 제휴 상태 ${Object.keys(data.allGolfPartnershipStatusV1||{}).length}곳`;
+  const summary = data => `예약 ${(data.allGolfReservations||[]).length}건 · 티타임 ${Object.values(data.allGolfOperationsV1?.teeTimes||{}).reduce((n,v)=>n+v.length,0)}개 · 특가 ${Object.keys(data.allGolfOperationsV1?.specialOffers||{}).length}건 · 제휴 상태 ${Object.keys(data.allGolfPartnershipStatusV1||{}).length}곳 · 제휴 신청 ${(data.allGolfPartnerApplicationsV1||[]).length}건`;
   let pending=null, safety=null;
   function view(shell) {
     pending=null;safety=null;
-    return shell('시연 데이터 백업·복원',`<section class="panel"><h2>현재 브라우저의 시연 데이터</h2><p class="notice">예약·티타임·요금·취소 정책·특가·대기·알림·제휴 상태를 JSON으로 옮깁니다. 244개 골프장 마스터 파일은 변경하지 않습니다. 같은 주소와 브라우저에서만 저장소가 공유됩니다.</p><p>이름·연락처·동반자·요청사항·메모·회원·문의·비밀번호·인증 토큰은 제외됩니다. 특가명과 제휴사명은 시연용 문구로 대체합니다. 운영 ID에 개인정보를 입력하지 마세요. 개인정보가 제거된 백업으로는 원래 개인정보를 복구할 수 없습니다. 임시 예약 잠금은 이전하지 않습니다.</p><button class="primary" id="demo-export">시연 데이터 JSON 다운로드</button></section><section class="panel"><h2>JSON 복원</h2><p>1. 파일 검증 → 2. 현재 데이터 백업 다운로드 및 저장 확인 → 3. 덮어쓰기 확인. 파일에 포함된 저장 항목만 교체하며, 포함되지 않은 항목은 유지합니다. 복원 중에는 다른 탭에서 예약·수정을 중단해주세요.</p><label class="field">백업 JSON 파일<input type="file" id="demo-import-file" accept=".json,application/json"></label><p id="demo-transfer-status" role="status" aria-live="polite"></p><div id="demo-restore-controls" hidden><p id="demo-transfer-preview"></p><button class="secondary" id="demo-before-export">복원 전 현재 데이터 백업 다운로드</button><label class="field"><span><input type="checkbox" id="demo-backup-saved"> 다운로드된 백업 파일이 저장된 것을 확인했습니다.</span></label><button class="danger" id="demo-restore" disabled>확인 후 덮어쓰기 복원</button></div></section>`);
+    return shell('시연 데이터 백업·복원',`<section class="panel"><h2>현재 브라우저의 시연 데이터</h2><p class="notice">예약·티타임·요금·취소 정책·특가·대기·알림·제휴 상태·제휴 신청을 JSON으로 옮깁니다. 244개 골프장 마스터 파일은 변경하지 않습니다. 같은 주소와 브라우저에서만 저장소가 공유됩니다.</p><p>이름·연락처·동반자·요청사항·메모·회원·문의·비밀번호·인증 토큰은 제외됩니다. 특가명·제휴사명·제휴 신청 담당자 연락처는 시연용 문구로 대체합니다. 운영 ID에 개인정보를 입력하지 마세요. 개인정보가 제거된 백업으로는 원래 개인정보를 복구할 수 없습니다. 임시 예약 잠금은 이전하지 않습니다.</p><button class="primary" id="demo-export">시연 데이터 JSON 다운로드</button></section><section class="panel"><h2>JSON 복원</h2><p>1. 파일 검증 → 2. 현재 데이터 백업 다운로드 및 저장 확인 → 3. 덮어쓰기 확인. 파일에 포함된 저장 항목만 교체하며, 포함되지 않은 항목은 유지합니다. 복원 중에는 다른 탭에서 예약·수정을 중단해주세요.</p><label class="field">백업 JSON 파일<input type="file" id="demo-import-file" accept=".json,application/json"></label><p id="demo-transfer-status" role="status" aria-live="polite"></p><div id="demo-restore-controls" hidden><p id="demo-transfer-preview"></p><button class="secondary" id="demo-before-export">복원 전 현재 데이터 백업 다운로드</button><label class="field"><span><input type="checkbox" id="demo-backup-saved"> 다운로드된 백업 파일이 저장된 것을 확인했습니다.</span></label><button class="danger" id="demo-restore" disabled>확인 후 덮어쓰기 복원</button></div></section>`);
   }
   function bind() {
     const exportButton=document.querySelector('#demo-export');if(!exportButton)return;

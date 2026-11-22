@@ -12,3 +12,37 @@
 .deal-stats{grid-template-columns:repeat(3,1fr);margin-top:14px}.deal-tools{display:grid;grid-template-columns:minmax(220px,1fr) 180px auto;gap:8px;margin-bottom:13px}.deal-tools input{border:1px solid var(--line);border-radius:9px;background:#fff;padding:9px 10px;color:var(--ink)}.deal-table .deal-amount{color:#d05a20}.badge.active{background:#e2f8ef;color:#087a59}.badge.scheduled{background:#eef4ff;color:#3768aa}.badge.ended,.badge.paused{background:#f2f3f3;color:#687873}.badge.soldout{background:#fff0f2;color:#bd4052}.deal-modal{width:min(100%,720px)}.form-error{min-height:18px;color:#c43d4f;font-size:12px;font-weight:700;margin-top:10px}.deal-modal input[readonly],.deal-modal select:disabled{background:#f3f5f4;color:#6f7d79}@media(max-width:760px){.deal-stats{grid-template-columns:repeat(2,1fr)}.deal-tools{grid-template-columns:1fr}.deal-modal{width:min(100%,600px)}}
 .simple-stats{grid-template-columns:repeat(3,minmax(170px,1fr));max-width:760px}.simple-stats .stat{padding:15px}.simple-stats .stat strong{font-size:21px}@media(max-width:760px){.simple-stats{grid-template-columns:1fr 1fr}}
 .repeat-days{display:flex;flex-wrap:wrap;gap:10px;border:1px solid var(--line);border-radius:9px;margin:18px 0 0;padding:12px;font-size:12px}.repeat-days legend{font-weight:700}.repeat-days label{white-space:nowrap}.modal-actions button:disabled{opacity:.45;cursor:not-allowed}
+
+/* 5단계: 제휴 신청·상태 조회 */
+.login-links{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.link-btn{border:0;background:none;color:var(--green);font-size:12px;font-weight:700;text-decoration:underline;padding:6px}
+.apply-view .login-card{width:min(100%,720px)}
+.apply-card h1{margin:16px 0 6px}
+.apply-lead{font-size:13px!important}
+.mode-switch{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap}
+.mode-switch button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:10px 12px;font-size:12px;font-weight:700;color:var(--muted)}
+.mode-switch button.active{background:var(--deep);border-color:var(--deep);color:#fff}
+.field-hint{color:var(--muted);font-size:10px;font-weight:400}
+.invalid{border-color:#d8556b!important;background:#fff6f7!important}
+.form-error{display:grid;gap:4px;color:#c23b4f;font-size:12px;font-weight:700;margin-top:10px}
+.apply-actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:18px;flex-wrap:wrap}
+.apply-actions a{text-decoration:none;display:inline-flex;align-items:center}
+a.primary.link{display:inline-flex;align-items:center;text-decoration:none;margin-top:8px}
+.receipt-badge{display:inline-block;margin-top:22px;background:#e2f8ef;color:#087a59;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:800}
+.receipt-dl{display:grid;gap:0;margin:16px 0}
+.receipt-dl div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12px}
+.receipt-dl dt{color:var(--muted)}
+.receipt-dl dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+.badge.pending{background:#fff4e7;color:#af6b13}
+.badge.approved{background:#e2f8ef;color:#087a59}
+.badge.rejected{background:#fff0f2;color:#c23b4f}
+#status-form{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:16px}
+#status-form .field{margin-top:0}
+#status-form .primary{height:44px}
+.status-list{display:grid;gap:6px;margin-top:10px}
+.status-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:9px;padding:10px;font-size:12px;text-align:left}
+.status-row span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status-row em{font-style:normal;white-space:nowrap}
+.status-result{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:14px;background:#f8fbfa}
+.status-result h3{margin:8px 0 0;font-size:16px}
+@media(max-width:600px){.apply-view{padding:12px}.apply-card{padding:20px}.receipt-dl div{grid-template-columns:90px 1fr}.apply-actions{justify-content:stretch}.apply-actions>*{flex:1;justify-content:center}}

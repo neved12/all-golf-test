@@ -279,3 +279,15 @@ main { padding:0 18px 30px; }
 .sort-row .chips { flex:1 1 100%; order:2; }
 .sort-row .filter-reset { order:1; margin-left:auto; }
 .slot-chips { mask-image:linear-gradient(to right, #000 86%, transparent 100%); -webkit-mask-image:linear-gradient(to right, #000 86%, transparent 100%); }
+
+/* 5단계: 골프장 제휴 신청·승인 */
+.partner-chip{display:inline-block;margin-left:6px;background:var(--mint-soft);color:#078d64;border-radius:6px;padding:2px 6px;font-size:10px;font-weight:800;vertical-align:middle;white-space:nowrap}
+.list-image.info{background:linear-gradient(145deg,#d7e2de,#9fb1ab);font-size:24px}
+.list-card.info-only .list-price strong{font-size:14px;color:var(--muted)}
+.list-info .card-actions a.outline{display:flex;align-items:center;justify-content:center;border:1px solid var(--mint);background:#fff;color:#078d64;border-radius:8px;padding:8px;font-size:11px;font-weight:800;text-decoration:none}
+.detail-links a.partner-link{border:1px solid var(--mint);background:#fff;border-radius:8px;padding:7px 9px;color:#078d64;font-size:11px;text-decoration:none;font-weight:700}
+.partner-invite{display:grid;gap:12px;background:#f9fffc;border:1px solid #b4e8d3;border-radius:15px;padding:16px}
+.partner-invite h2{margin:4px 0 0;font-size:18px}
+.partner-invite p{margin:7px 0 0;font-size:11px;color:var(--muted);line-height:1.6}
+.partner-invite .kicker{color:var(--mint);font-weight:800;font-size:11px}
+.partner-invite-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:11px 13px;border-radius:10px;font-size:12px;font-weight:800}
