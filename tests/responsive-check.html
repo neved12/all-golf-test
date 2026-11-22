@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALL:GOLF 반응형 점검 (360 / 390 / 430)</title>
+  <style>
+    body { margin:0; padding:24px; font-family:"Pretendard","Noto Sans KR",Arial,sans-serif; background:#eef2f0; color:#0c2925; }
+    h1 { font-size:20px; margin:0 0 6px; }
+    p.desc { margin:0 0 18px; color:#5f716c; font-size:13px; }
+    #summary { display:grid; gap:6px; margin:0 0 18px; font-size:13px; }
+    #summary div { padding:10px 12px; border-radius:10px; background:#fff; border:1px solid #dbe7e2; }
+    #summary .ok { border-color:#9fd9c3; background:#f2fbf7; color:#0a6b4f; }
+    #summary .bad { border-color:#f2b8c0; background:#fff5f6; color:#a8273a; }
+    .frames { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+    .frame { background:#fff; border-radius:14px; padding:10px; box-shadow:0 2px 12px #0c29250f; }
+    .frame h2 { margin:0 0 8px; font-size:12px; color:#5f716c; }
+    iframe { border:1px solid #dbe7e2; border-radius:10px; display:block; background:#fff; }
+  </style>
+</head>
+<body>
+  <h1>ALL:GOLF 반응형 점검</h1>
+  <p class="desc">360 / 390 / 430px 폭에서 앱을 띄우고 가로 넘침(scrollWidth &gt; innerWidth)과 주요 요소 폭을 확인합니다. 앱은 iframe에서 실제로 실행됩니다.</p>
+  <div id="summary">측정 중…</div>
+  <div class="frames" id="frames"></div>
+  <script>
+    var widths = [360, 390, 430];
+    var frames = document.getElementById('frames');
+    var summary = document.getElementById('summary');
+    var results = [];
+
+    function measure(frame, width) {
+      var doc = frame.contentDocument;
+      var win = frame.contentWindow;
+      var root = doc.documentElement;
+      var body = doc.body;
+      var offenders = [];
+      var selectors = ['.app-shell', 'main', '.topbar', '.bottom-nav', '.list-sticky', '.date-row', '.time', '.booking-summary', '.payment-box', '.reservation-detail-card', '.detail-booking-dock', '.hero-title', '.slot-chips'];
+      selectors.forEach(function (selector) {
+        var element = doc.querySelector(selector);
+        if (!element) return;
+        var rect = element.getBoundingClientRect();
+        if (rect.right > width + 1 || rect.width > width + 1) {
+          offenders.push(selector + ' (' + Math.round(rect.width) + 'px 폭, right ' + Math.round(rect.right) + ')');
+        }
+      });
+      var nav = doc.querySelector('.bottom-nav');
+      var navRect = nav ? nav.getBoundingClientRect() : null;
+      return {
+        width: width,
+        scrollWidth: Math.max(root.scrollWidth, body ? body.scrollWidth : 0),
+        innerWidth: win.innerWidth,
+        offenders: offenders,
+        navFixed: nav ? win.getComputedStyle(nav).position : 'none',
+        navBottom: navRect ? Math.round(win.innerHeight - navRect.bottom) : null,
+        rendered: Boolean(doc.querySelector('#app') && doc.querySelector('#app').children.length)
+      };
+    }
+
+    widths.forEach(function (width) {
+      var holder = document.createElement('div');
+      holder.className = 'frame';
+      var title = document.createElement('h2');
+      title.textContent = width + 'px';
+      var frame = document.createElement('iframe');
+      frame.width = width;
+      frame.height = 720;
+      frame.src = '../index.html';
+      holder.appendChild(title);
+      holder.appendChild(frame);
+      frames.appendChild(holder);
+
+      frame.addEventListener('load', function () {
+        setTimeout(function () {
+          var result = measure(frame, width);
+          results.push(result);
+          var row = document.createElement('div');
+          var overflow = result.scrollWidth > width + 1;
+          var bad = overflow || result.offenders.length > 0 || !result.rendered || result.navFixed !== 'fixed';
+          row.className = bad ? 'bad' : 'ok';
+          row.textContent = width + 'px · scrollWidth ' + result.scrollWidth + ' · innerWidth ' + result.innerWidth
+            + ' · 하단내비 ' + result.navFixed
+            + (result.offenders.length ? ' · 넘침: ' + result.offenders.join(', ') : ' · 넘침 없음')
+            + (result.rendered ? '' : ' · 앱 렌더 실패');
+          summary.appendChild(row);
+          window.__RESPONSIVE_RESULTS = results;
+        }, 700);
+      });
+    });
+  </script>
+</body>
+</html>
