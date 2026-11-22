@@ -308,7 +308,7 @@
   const reject = (id, options = {}) => decide(id, 'rejected', { ...options, reason: options?.reason });
 
   const list = () => read().map(item => ({ ...item, statusLabel: STATUS_LABELS[item.status] || item.status, modeLabel: MODE_LABELS[item.courseMode] || item.courseMode })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  const get = id => { const found = read().find(item => item.id === text(id)); return found ? { ...found, statusLabel: STATUS_LABELS[found.status] || found.status } : null; };
+  const get = id => { const found = read().find(item => item.id === text(id)); return found ? { ...found, statusLabel: STATUS_LABELS[found.status] || found.status, modeLabel: MODE_LABELS[found.courseMode] || found.courseMode } : null; };
   const statusOf = receipt => get(receipt);
   const stats = () => {
     const all = read();
