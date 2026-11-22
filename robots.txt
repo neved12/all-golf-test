@@ -1,0 +1,8 @@
+# ALL:GOLF 시연 배포용 — 내부 시연 화면과 원본 자료 폴더는 색인하지 않습니다.
+User-agent: *
+Disallow: /admin/
+Disallow: /partner/
+Disallow: /data/
+Disallow: /tests/
+Disallow: /scripts/
+Allow: /$
