@@ -66,3 +66,206 @@ main { padding:0 19px 25px; }.greeting{font-size:13px;color:var(--muted);margin:
 .info-hero{background:linear-gradient(145deg,#e2f4ed,#a8d8c7)}.info-badge{display:inline-flex;width:max-content;padding:5px 9px;border-radius:999px;background:#eef3f1;color:#4a615b;font-size:12px;font-weight:800}
 .load-more{display:block;width:100%;margin:16px 0 4px;padding:13px;border:1px solid #bed8cf;border-radius:12px;background:#fff;color:#087c60;font-weight:800}
 @media (max-width:420px){.national-filters{grid-template-columns:1fr 1fr}.national-filters label{font-size:11px}}
+
+/* =============================================================================
+   모바일 UI/UX 고도화 + 재방문 기능 (2026-11-22)
+   - 하단 내비게이션 고정, 상단 조건 바 고정, 접히는 상세 필터
+   - 카드 티타임 칩, 상세 페이지 순서(이미지→핵심정보→날짜·티타임→소개)
+   - 예약 상세·찜 날짜 연동·대기·공유·일정 저장 화면
+   - 360 / 390 / 430px 기준 반응형
+   ============================================================================= */
+:root { --nav-h:64px; --radius:16px; }
+html, body { overflow-x:hidden; }
+body { -webkit-text-size-adjust:100%; }
+.app-shell { width:100%; max-width:430px; min-height:100dvh; padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 22px); }
+@media (min-width:520px) { .app-shell { min-height:100dvh; } }
+
+/* 상단 바 */
+.topbar { position:sticky; top:0; z-index:9; height:60px; padding:13px 18px 10px; background:rgba(255,255,255,.95); backdrop-filter:blur(8px); border-bottom:1px solid rgba(231,238,235,.9); }
+.top-actions { position:relative; }
+.badge-dot { position:absolute; top:5px; right:6px; width:8px; height:8px; border-radius:50%; background:#e95171; border:1.5px solid #fff; }
+main { padding:0 18px 30px; }
+
+/* 하단 내비게이션: 화면에 고정 */
+.bottom-nav { position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px; height:calc(var(--nav-h) + env(safe-area-inset-bottom)); padding:0 4px env(safe-area-inset-bottom); background:rgba(255,255,255,.98); border-top:1px solid var(--line); box-shadow:0 -6px 18px rgba(12,41,37,.07); z-index:12; }
+.bottom-nav .nav-item { gap:2px; font-size:10px; }
+.bottom-nav .nav-item b { font-size:19px; line-height:1; }
+.bottom-nav .nav-item.active { color:var(--mint); }
+
+/* 공통 요소 */
+.section-head small { font-weight:500; }
+.text-link { text-decoration:underline; text-underline-offset:3px; }
+.primary.wide { display:block; width:100%; padding:13px; margin:4px 0 16px; border:0; border-radius:11px; background:var(--dark); color:#fff; font-weight:800; font-size:14px; }
+.footer-note { margin:22px 0 4px; font-size:10px; line-height:1.65; color:var(--muted); text-align:center; }
+.sample-tag { display:inline-block; margin-left:6px; padding:2px 7px; border-radius:999px; background:#eef2f0; color:#63736f; font-size:9px; font-weight:800; }
+.box-title { margin:0 0 10px; font-size:14px; }
+.center { text-align:center; }
+
+/* 최근 검색 / 최근 본 */
+.recent-section { margin-top:20px; }
+.recent-chips { flex-wrap:nowrap; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.recent-chips::-webkit-scrollbar { display:none; }
+.recent-chip { flex:0 0 auto; border-radius:999px; padding:8px 12px; font-size:11px; color:#3f5c54; background:#f6faf8; border:1px solid #dfeee7; }
+.recent-chip span { color:#8aa09a; font-size:10px; margin-left:3px; }
+.favorite-home-card .fav-price { color:#0b7f5f; font-weight:700; }
+
+/* 검색 결과: 고정 조건 바 + 접히는 필터 */
+.list-sticky { position:sticky; top:60px; z-index:7; display:flex; gap:7px; align-items:center; padding:8px 0 9px; margin:0 -2px 10px; background:linear-gradient(#fff 78%, rgba(255,255,255,.86)); }
+.sticky-condition { flex:1; min-width:0; border:1px solid #cfe9de; background:#f2fbf7; color:#0a7154; border-radius:11px; padding:10px 11px; font-size:11px; font-weight:700; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sticky-condition b { float:none; margin-left:6px; color:#087d5a; font-size:10px; }
+.filter-toggle { flex:0 0 auto; border:1px solid var(--line); background:#fff; color:#3f5c54; border-radius:11px; padding:10px 11px; font-size:11px; font-weight:800; }
+.filter-toggle em { font-style:normal; display:inline-block; min-width:16px; margin-left:3px; padding:1px 4px; border-radius:999px; background:var(--mint); color:#fff; font-size:9px; }
+.filter-toggle.open { border-color:var(--mint); color:#087d5a; background:#f2fbf7; }
+.filter-panel { display:none; padding:4px 0 10px; }
+.filter-panel.open { display:block; animation:fade-in .18s ease-out; }
+@keyframes fade-in { from { opacity:.4; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+
+/* 카드 안의 주요 티타임 */
+.slot-chips { display:flex; gap:5px; margin:9px 0 2px; overflow-x:auto; scrollbar-width:none; }
+.slot-chips::-webkit-scrollbar { display:none; }
+.slot-chip { flex:0 0 auto; display:flex; align-items:baseline; gap:4px; border:1px solid #cfe9de; background:#f2fbf7; color:#0b7f5f; border-radius:9px; padding:6px 8px; font-size:10px; font-weight:700; }
+.slot-chip b { font-size:12px; color:#064f3d; }
+.slot-chip i { font-style:normal; font-size:9px; color:#7d918b; }
+.list-info .slot-chips + .demo-warning { margin-top:6px; }
+
+/* 상세: 핵심 정보 → 날짜·티타임 */
+.course-overview.key-info { display:grid; grid-template-columns:1fr; gap:8px; padding:14px 2px 6px; }
+.course-overview.key-info .key-row { display:flex; align-items:center; gap:8px; }
+.course-overview.key-info .key-row b { font-size:17px; color:var(--ink); }
+.course-overview.key-info .key-chips { display:flex; flex-wrap:wrap; gap:6px; grid-column:1/-1; }
+.course-overview.key-info .key-chips span { border:1px solid var(--line); background:#f7faf9; border-radius:8px; padding:4px 8px; font-size:10px; color:#4a625c; }
+.demo-chip { display:inline-block; padding:3px 7px; border-radius:999px; background:#fff3e3; color:#a96418; font-size:9px; font-weight:800; }
+.detail-tabs { position:sticky; top:60px; z-index:6; background:#fff; margin-bottom:6px; }
+.tee-section { margin-top:6px; }
+.session-chips { margin:8px 0 4px; }
+.tee-subtitle { display:flex; align-items:baseline; gap:6px; margin:14px 0 8px; font-size:14px; }
+.tee-subtitle small { font-weight:500; color:var(--muted); font-size:10px; }
+.time { gap:10px; }
+.time-main { display:grid; gap:2px; min-width:0; }
+.time-main b { font-size:15px; }
+.time-main small { font-size:10px; }
+.time-session { width:max-content; padding:1px 5px; border-radius:5px; background:var(--mint-soft); color:#0b7f5f; font-size:9px; font-weight:800; }
+.time.unavailable { opacity:.72; }
+.detail-booking-dock { bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom)); border-radius:14px 14px 0 0; }
+
+/* 예약 확인 화면 간소화 */
+.booking-summary { border:1px solid var(--line); border-radius:var(--radius); padding:15px; background:#fff; }
+.booking-summary h2 { margin:0 0 6px; font-size:17px; }
+.booking-summary p { margin:0; font-size:12px; color:var(--muted); line-height:1.6; }
+.booking-summary p b { color:var(--ink); }
+.summary-people { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-size:12px; font-weight:800; }
+.summary-people select { border:1px solid var(--line); border-radius:9px; background:#fff; padding:8px 10px; font-size:12px; color:var(--ink); }
+.summary-deal { margin-top:10px !important; color:#c65b20 !important; font-weight:700; }
+.compact-payment { padding:14px 15px; }
+.pay-total { font-size:14px !important; }
+.pay-total b { font-size:19px !important; }
+.pay-deposit b { color:#078d64; }
+.pay-details { border-top:1px solid var(--line); margin-top:6px; padding-top:4px; }
+.pay-details summary { cursor:pointer; font-size:11px; font-weight:800; color:#087d5a; padding:6px 0; list-style:none; }
+.pay-details summary::-webkit-details-marker { display:none; }
+.pay-details summary::after { content:'⌄'; float:right; }
+.pay-details[open] summary::after { content:'⌃'; }
+.pay-note { margin:6px 0 0 !important; }
+.field-error { display:block; margin:-8px 0 2px; color:#c2414f; font-size:11px; }
+.policy-details { margin:2px 0 14px; border-top:1px solid var(--line); padding-top:10px; font-size:11px; color:var(--muted); }
+.policy-details summary { cursor:pointer; font-weight:800; color:#087d5a; }
+.booking-bar { position:sticky; bottom:calc(var(--nav-h) + env(safe-area-inset-bottom)); z-index:8; display:flex; align-items:center; gap:12px; padding:12px 0 8px; background:#fff; border-top:1px solid var(--line); }
+.booking-bar span { display:grid; font-size:10px; color:var(--muted); white-space:nowrap; }
+.booking-bar span b { font-size:15px; color:var(--ink); }
+.booking-bar button { flex:1; padding:14px; font-size:14px; }
+.complete-actions .primary { width:100%; }
+.complete .secondary { width:100%; margin-top:8px; padding:12px; font-size:12px; }
+
+/* 내 예약 / 예약 상세 */
+.res-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.dday { font-size:10px; font-weight:800; color:#0b7f5f; background:var(--mint-soft); border-radius:999px; padding:3px 8px; }
+.status.past { background:#eef2f0; color:#5f716c; }
+.res-meta { display:grid; gap:3px; font-size:11px; color:var(--muted); margin-top:2px; }
+.res-meta b { color:var(--ink); }
+.res-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; }
+.res-actions .secondary { flex:1 1 auto; margin-top:0; text-align:center; }
+.reservation-detail-card { border:1px solid var(--line); border-radius:var(--radius); padding:16px; display:grid; gap:8px; background:#fff; }
+.reservation-detail-card h2 { margin:2px 0 0; font-size:19px; }
+.res-when { margin:0; font-size:13px; line-height:1.6; color:var(--ink); }
+.res-line { display:flex; justify-content:space-between; gap:12px; margin:0; font-size:12px; color:var(--muted); }
+.res-line b { color:var(--ink); text-align:right; overflow-wrap:anywhere; }
+.cancel-card { border:1px solid #f1d9b6; background:#fffaf2; border-radius:var(--radius); padding:15px; margin:14px 0; }
+.cancel-card.done { border-color:var(--line); background:#f8faf9; }
+.cancel-card .res-line b { color:#8a5a12; }
+.cancel-card.done .res-line b { color:var(--ink); }
+.detail-action-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:16px 0 8px; }
+.detail-action-grid .secondary { margin:0; padding:12px; font-size:12px; text-align:center; }
+.secondary.danger { color:#c2414f; border-color:#f0c6cb; background:#fff7f8; }
+
+/* 대기 */
+.wait-alert { margin:6px 0 0 !important; padding:9px 10px; border:1px solid #b9e6d3; border-radius:10px; background:#eefbf4; color:#0a6b4f !important; font-size:11px !important; }
+.wait-alert .text-link { color:#0a6b4f; font-weight:800; }
+.wait-slot { margin:6px 0; font-size:12px; color:#0a6b4f; }
+.wait-course-fixed { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0 8px; padding:10px 12px; border:1px solid #cfe9de; border-radius:10px; background:#f4fbf8; font-size:12px; font-weight:800; color:#0a6b4f; }
+
+/* 공유 / 일정 저장 */
+.share-banner { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:10px 0 0; padding:10px 12px; border-radius:11px; background:#eef6ff; color:#245a92; font-size:11px; }
+.share-banner button { border:0; background:transparent; color:#245a92; font-size:10px; font-weight:800; text-decoration:underline; }
+.share-link input { width:100%; border:1px solid var(--line); border-radius:9px; padding:10px; font-size:10px; color:#4a625c; background:#f7faf9; }
+.modal-note { font-size:11px; color:var(--muted); line-height:1.6; }
+.hold-countdown { color:#0a6d4f; font-weight:800; font-variant-numeric:tabular-nums; }
+
+/* 준비 중 화면 */
+.ready-page { display:grid; justify-items:center; gap:10px; padding:38px 14px 20px; text-align:center; }
+.ready-icon { width:66px; height:66px; border-radius:22px; display:grid; place-items:center; font-size:30px; background:var(--mint-soft); }
+.ready-badge { display:inline-block; padding:4px 10px; border-radius:999px; background:#f1f4f3; color:#5f716c; font-size:10px; font-weight:800; }
+.ready-page h2 { margin:2px 0 0; font-size:20px; }
+.ready-page p { margin:0; font-size:12px; line-height:1.7; color:var(--muted); }
+.ready-actions { display:grid; gap:8px; width:100%; margin-top:8px; }
+.ready-actions .primary { padding:14px; font-size:14px; }
+.ready-actions .secondary { margin:0; padding:13px; font-size:13px; }
+.quick.ready small { color:#a96418; }
+.notification-card .status { margin-bottom:2px; }
+
+/* 반응형: 360 / 390 / 430 */
+@media (max-width:359px) {
+  main { padding:0 12px 28px; }
+  .topbar { padding:12px 13px 9px; }
+  .hero-title { font-size:21px; letter-spacing:-1px; }
+  .date-row { gap:5px; }
+  .date { min-width:50px; flex:0 0 50px; padding:7px 0; }
+  .time-card, .list-card, .reservation-card, .favorite-card { padding:12px; }
+  .list-card { grid-template-columns:72px 1fr; gap:9px; }
+  .result-filters, .compare-filters { grid-template-columns:1fr 1fr; }
+  .quick-grid.main-services { grid-template-columns:1fr 1fr; }
+  .detail-action-grid { grid-template-columns:1fr; }
+  .card-actions { grid-template-columns:1fr; }
+  .booking-bar span b { font-size:13px; }
+  .time { padding:10px; }
+}
+@media (min-width:360px) and (max-width:389px) {
+  main { padding:0 15px 28px; }
+  .hero-title { font-size:23px; }
+  .date { min-width:54px; flex:1 0 54px; }
+}
+@media (min-width:390px) and (max-width:429px) {
+  main { padding:0 19px 30px; }
+  .date { min-width:60px; flex:1 0 60px; }
+}
+@media (min-width:430px) {
+  main { padding:0 20px 30px; }
+  .hero-title { font-size:26px; }
+  .date { min-width:64px; flex:1 0 64px; }
+  .list-card { grid-template-columns:104px 1fr; }
+  .time-card { padding:17px; }
+}
+.date { display:grid; gap:1px; justify-items:center; padding:8px 2px; }
+.date strong { display:block; margin:0; font-size:14px; color:var(--ink); }
+.date span { display:block; margin:0; font-size:10px; color:var(--muted); }
+.date.active strong { color:#087d5a; }
+
+/* 카드 안 버튼 기본 규칙(.list-info button)보다 우선하도록 보정 */
+.list-info { min-width:0; }
+.list-card { overflow:hidden; }
+.list-info .slot-chips { margin:9px 0 4px; }
+.list-info .slot-chip,
+.list-info .slot-chip:hover { width:auto; flex:0 0 auto; margin:0; padding:6px 8px; border:1px solid #cfe9de; border-radius:9px; background:#f2fbf7; color:#0b7f5f; font-size:10px; font-weight:700; }
+.list-info .slot-chip b { color:#064f3d; font-size:12px; }
+.list-info .slot-chip i { color:#7d918b; font-size:9px; }
+.field-error[hidden] { display:none; }
+.refund-table { margin:8px 0 2px; font-size:10px; color:var(--muted); line-height:1.6; }

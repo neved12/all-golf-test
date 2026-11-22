@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALL:GOLF 반응형 점검 (360 / 390 / 430)</title>
+  <style>
+    body { margin:0; padding:24px; font-family:"Pretendard","Noto Sans KR",Arial,sans-serif; background:#eef2f0; color:#0c2925; }
+    h1 { font-size:20px; margin:0 0 6px; }
+    p.desc { margin:0 0 16px; color:#5f716c; font-size:13px; line-height:1.6; }
+    input[type=text] { width:min(520px,100%); padding:10px 12px; border:1px solid #cfded8; border-radius:9px; font:inherit; font-size:13px; }
+    button { margin-left:8px; padding:10px 14px; border:0; border-radius:9px; background:#0c332c; color:#fff; font:inherit; font-size:13px; font-weight:700; }
+    #summary { display:grid; gap:6px; margin:16px 0; font-size:13px; }
+    #summary div { padding:10px 12px; border-radius:10px; background:#fff; border:1px solid #dbe7e2; }
+    #summary .ok { border-color:#9fd9c3; background:#f2fbf7; color:#0a6b4f; }
+    #summary .bad { border-color:#f2b8c0; background:#fff5f6; color:#a8273a; }
+    #summary .head { background:#e7eeeb; border-color:#c9d9d3; font-weight:700; }
+    .hidden-stage { position:absolute; left:-10000px; top:0; }
+    iframe { border:0; display:block; }
+  </style>
+</head>
+<body>
+  <h1>ALL:GOLF 반응형 점검</h1>
+  <p class="desc">360 / 390 / 430px 폭에서 실제 앱을 띄워 가로 넘침(scrollWidth &gt; innerWidth)과 주요 요소 폭, 하단 내비게이션 고정 여부를 확인합니다.
+  점검할 화면은 앱 쿼리로 지정합니다. 여러 개는 쉼표로 구분하세요. (예: <code>page=list,page=detail&amp;course=woojeong</code>)</p>
+  <input type="text" id="views" value="page=home,page=list,page=detail&amp;course=woojeong,page=benefits,page=favorites,page=waitlist,page=join">
+  <button id="run">다시 점검</button>
+  <div id="summary">측정 중…</div>
+  <div class="hidden-stage" id="stage"></div>
+  <script>
+    var widths = [360, 390, 430];
+    var selectors = ['.app-shell', 'main', '.topbar', '.bottom-nav', '.list-sticky', '.date-row', '.slot-chips', '.time', '.booking-summary', '.payment-box', '.reservation-detail-card', '.detail-action-grid', '.detail-booking-dock', '.hero-title', '.ready-page', '.benefit-section', '.reservation-card'];
+    var results = [];
+
+    function measure(frame, width, view) {
+      var doc = frame.contentDocument;
+      var win = frame.contentWindow;
+      var root = doc.documentElement;
+      var body = doc.body;
+      var offenders = [];
+      selectors.forEach(function (selector) {
+        var elements = doc.querySelectorAll(selector);
+        for (var i = 0; i < Math.min(elements.length, 4); i++) {
+          var rect = elements[i].getBoundingClientRect();
+          if (rect.right > width + 1 || rect.width > width + 1) {
+            offenders.push(selector + ' (' + Math.round(rect.width) + 'px)');
+            break;
+          }
+        }
+      });
+      var nav = doc.querySelector('.bottom-nav');
+      var navRect = nav ? nav.getBoundingClientRect() : null;
+      var app = doc.querySelector('#app');
+      return {
+        width: width, view: view,
+        scrollWidth: Math.max(root.scrollWidth, body ? body.scrollWidth : 0),
+        innerWidth: win.innerWidth,
+        offenders: offenders,
+        navPosition: nav ? win.getComputedStyle(nav).position : 'none',
+        navBottom: navRect ? Math.round(win.innerHeight - navRect.bottom) : null,
+        rendered: Boolean(app && app.children.length)
+      };
+    }
+
+    function run() {
+      var stage = document.getElementById('stage');
+      var summary = document.getElementById('summary');
+      stage.innerHTML = '';
+      summary.innerHTML = '<div>측정 중…</div>';
+      results = [];
+      window.__RESPONSIVE_RESULTS = results;
+      var views = document.getElementById('views').value.split(',').map(function (value) { return value.trim(); }).filter(Boolean);
+      var jobs = [];
+      views.forEach(function (view) {
+        widths.forEach(function (width) { jobs.push({ view: view, width: width }); });
+      });
+      var done = 0;
+      jobs.forEach(function (job) {
+        var frame = document.createElement('iframe');
+        frame.width = job.width;
+        frame.height = 760;
+        frame.src = '../index.html?' + job.view;
+        stage.appendChild(frame);
+        frame.addEventListener('load', function () {
+          setTimeout(function () {
+            var result = measure(frame, job.width, job.view);
+            results.push(result);
+            done += 1;
+            if (done === jobs.length) report();
+          }, 600);
+        });
+      });
+    }
+
+    function report() {
+      var summary = document.getElementById('summary');
+      summary.innerHTML = '';
+      var views = results.map(function (item) { return item.view; }).filter(function (value, index, list) { return list.indexOf(value) === index; });
+      views.forEach(function (view) {
+        var head = document.createElement('div');
+        head.className = 'head';
+        head.textContent = view || '(기본)';
+        summary.appendChild(head);
+        results.filter(function (item) { return item.view === view; }).sort(function (a, b) { return a.width - b.width; }).forEach(function (result) {
+          var overflow = result.scrollWidth > result.width + 1;
+          var bad = overflow || result.offenders.length > 0 || !result.rendered || result.navPosition !== 'fixed' || result.navBottom !== 0;
+          var row = document.createElement('div');
+          row.className = bad ? 'bad' : 'ok';
+          row.textContent = result.width + 'px · scrollWidth ' + result.scrollWidth + ' · 넘침 ' + (overflow ? 'O' : 'X')
+            + ' · 하단내비 ' + result.navPosition + '(bottom ' + result.navBottom + ')'
+            + (result.offenders.length ? ' · 요소 넘침: ' + result.offenders.join(', ') : '')
+            + (result.rendered ? '' : ' · 렌더 실패');
+          summary.appendChild(row);
+        });
+      });
+      window.__RESPONSIVE_RESULTS = results;
+    }
+
+    document.getElementById('run').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>
