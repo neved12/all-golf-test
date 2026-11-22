@@ -82,17 +82,25 @@ const won = value => value == null ? '가격 확인 필요' : `${Number(value).t
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const readJSON = (key, fallback) => { try { const parsed = JSON.parse(localStorage.getItem(key) || 'null'); return parsed ?? fallback; } catch { return fallback; } };
 
+/* 공유 링크·저장값에서 온 날짜가 YYYY-MM-DD 형식의 실제 날짜인지 확인하고, 아니면 오늘로 대체한다. */
+const isValidISODate = value => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return false;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === value;
+};
+const safeISO = value => isValidISODate(value) ? value : todayISO;
 const formatCalendarDate = iso => {
-  const d = new Date(`${iso}T00:00:00`);
+  const d = new Date(`${safeISO(iso)}T00:00:00`);
   return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${weekdayLabels[d.getDay()]})`;
 };
 const shortDate = iso => {
-  const d = new Date(`${iso}T00:00:00`);
+  const d = new Date(`${safeISO(iso)}T00:00:00`);
   return `${d.getMonth() + 1}/${d.getDate()}(${weekdayLabels[d.getDay()]})`;
 };
 const currentDateShort = () => date.replace(/^\d{4}년 /, '').replace(' 일', '');
 const shiftISO = (iso, days) => {
-  const d = new Date(`${iso}T00:00:00`);
+  const d = new Date(`${safeISO(iso)}T00:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
@@ -102,7 +110,7 @@ const nextWeekendISO = () => {
   return shiftISO(todayISO, days);
 };
 const dateOptions = (anchor = dateAnchor, count = 5) => Array.from({ length: count }, (_, index) => {
-  const d = new Date(`${anchor}T00:00:00`);
+  const d = new Date(`${safeISO(anchor)}T00:00:00`);
   d.setDate(d.getDate() + index);
   const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return { iso, label: formatCalendarDate(iso), short: shortDate(iso) };
@@ -1028,7 +1036,7 @@ function benefits() {
   <section class="benefit-section"><div class="section-head"><div><h2>내 쿠폰 <em>3장</em></h2><small class="sample-tag">샘플</small></div><button class="text-link" data-benefit="coupons">쿠폰 전체보기</button></div><div class="coupon-stack"><article><span class="coupon-badge">첫 예약</span><b>10,000원 할인</b><small>샘플 쿠폰 · 실제 결제 없음</small></article><article><span class="coupon-badge">평일 한정</span><b>평일 라운드 5% 할인</b><small>샘플 쿠폰 · 실제 결제 없음</small></article><article><span class="coupon-badge">친구 초대</span><b>20,000원 할인</b><small>샘플 쿠폰 · 실제 결제 없음</small></article></div></section>
   <section class="benefit-section"><div class="section-head"><div><div class="kicker">한정 수량</div><h2>오늘의 특가</h2></div></div><div class="deal-list">${offers.length ? offers.map(specialCard).join('') : '<div class="empty compact-empty">현재 판매 중인 시연 특가가 없습니다.</div>'}</div></section>
   <section class="benefit-section member-benefit"><div class="section-head"><div><div class="kicker">회원 전용</div><h2>ALL:GOLF 회원 혜택</h2></div></div><ul><li><b>첫 예약 할인</b><span>첫 예약 시 10,000원 자동 할인 (샘플)</span></li><li><b>조인 수수료 할인</b><span>회원 전용 조인 제휴 혜택 · 준비 중</span></li><li><b>취소티 우선 알림</b><span>원하는 티타임을 빠르게 만나보세요</span></li></ul></section>
-  <section class="benefit-section"><div class="section-head"><h2>진행 중인 이벤트</h2><span class="soon">샘플</span></div><div class="event-grid"><article class="event-card invite"><span>초대 이벤트</span><h3>친구 초대 이벤트</h3><p>친구가 첫 예약을 완료하면<br>나도 친구도 20,000원 할인 (샘플)</p><button data-benefit="invite">자세히 보기</button></article><article class="event-card summer"><span>8월 한정</span><h3>여름 라운드 특가</h3><p>제휴 골프장 최대 30% 할인 (샘플)</p><button data-benefit="summer">혜택 확인</button></article></div></section>
+  <section class="benefit-section"><div class="section-head"><h2>진행 중인 이벤트</h2><span class="soon">샘플</span></div><div class="event-grid"><article class="event-card invite"><span>초대 이벤트</span><h3>친구 초대 이벤트</h3><p>친구가 첫 예약을 완료하면 <br>나도 친구도 20,000원 할인 (샘플)</p><button data-benefit="invite">자세히 보기</button></article><article class="event-card summer"><span>8월 한정</span><h3>여름 라운드 특가</h3><p>제휴 골프장 최대 30% 할인 (샘플)</p><button data-benefit="summer">혜택 확인</button></article></div></section>
   <section class="benefit-section"><div class="section-head"><h2>제휴 혜택</h2><span class="soon">준비 중</span></div><div class="partner-benefit"><article><i>⛳</i><b>골프장 제휴 할인</b><span>준비 중입니다</span></article><article><i>👟</i><b>골프용품 할인</b><span>준비 중입니다</span></article><article><i>✈</i><b>골프여행 특별가</b><span>준비 중입니다</span></article></div></section>
   <p class="footer-note">${fullDemoNotice}</p>`;
 }
@@ -1045,7 +1053,7 @@ function readyPage(kind) {
     <div class="ready-icon">${config.icon}</div>
     <span class="ready-badge">준비 중</span>
     <h2>${config.title}은 준비 중입니다</h2>
-    <p>${config.desc}<br>${config.detail}</p>
+    <p>${config.desc} <br>${config.detail}</p>
     <div class="ready-actions">
       <button class="primary" data-go="list">골프장 예약하기</button>
       <button class="secondary" data-go="home">홈으로</button>
@@ -1364,7 +1372,7 @@ function bind() {
       region = entry.region || '전체';
       city = entry.city || '';
       people = Number(entry.people) || people;
-      if (entry.date) { calendarDate = entry.date; dateAnchor = entry.date; date = formatCalendarDate(entry.date); }
+      if (isValidISODate(entry.date)) { calendarDate = entry.date; dateAnchor = entry.date; date = formatCalendarDate(entry.date); }
       page = 'list';
       render();
       window.scrollTo({ top: 0 });
@@ -1544,10 +1552,14 @@ function boot() {
     if (target) { course = target; incoming = true; }
   }
   if (params.get('date')) {
-    calendarDate = params.get('date');
-    dateAnchor = calendarDate;
-    date = formatCalendarDate(calendarDate);
-    incoming = true;
+    const sharedDate = params.get('date');
+    /* ?date=abc 같은 값은 무시하고 기본(오늘) 날짜를 유지한다. */
+    if (isValidISODate(sharedDate)) {
+      calendarDate = sharedDate;
+      dateAnchor = sharedDate;
+      date = formatCalendarDate(sharedDate);
+      incoming = true;
+    }
   }
   if (params.get('people')) {
     people = Math.min(4, Math.max(2, Number(params.get('people')) || 4));

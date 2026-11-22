@@ -1,6 +1,6 @@
 # 충청권 골프장 마스터 데이터 작업 기록
 
-`golf-courses.js`가 골프장 마스터 및 검증 대기 목록입니다. 프로토타입에서는 65곳 모두 사용자 검색과 시연 예약에 노출합니다. `courses-data.js`는 이전 목록의 보관본이며 더 이상 로드하지 않습니다. 실제 DB 이관 전에는 아래 미검증 항목을 운영자 또는 골프장 공식 채널로 다시 확인해야 합니다.
+`golf-courses.js`가 골프장 마스터 및 검증 대기 목록입니다. 프로토타입에서는 65곳 모두 사용자 검색과 시연 예약에 노출합니다. 실제 DB 이관 전에는 아래 미검증 항목을 운영자 또는 골프장 공식 채널로 다시 확인해야 합니다.
 
 ## 상태와 수량
 
@@ -32,8 +32,15 @@
 
 기존 시연 골프장인 우정힐스 CC, 세종에머슨 CC, 프린세스 CC는 마스터에 각각 한 번만 등록하고 시연 데이터와 `id`로 결합합니다. 이전 실행 시 3곳이 중복 노출되던 문제를 없앴습니다.
 
+## 원본 자료 (협회 가이드북)
+
+- 원문: [한국골프장경영협회 2025 가이드북 회원사 현황](https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf) (기준일 2024-12-08)
+- 원문 PDF는 저작권상 공개 저장소·배포 사이트에 사본으로 두지 않습니다. `national-golf-courses.js`의 `source`·`sources` 필드에 위 출처 URL만 남깁니다.
+- 전국 목록을 다시 생성해야 할 때는 원문 PDF를 로컬 `data/sources/`에 직접 내려받은 뒤 `node scripts/import-kgba-courses.js`를 실행합니다. `data/sources/*.pdf`는 `.gitignore` 대상이라 커밋되지 않습니다.
+
 ## 출처와 후속 작업
 
+- 전국 회원사 명부: [한국골프장경영협회 2025 가이드북](https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf)
 - 기본 주소 일부: [대한골프협회 코스핸디캡 계산기](https://www.kgagolf.or.kr/web/handicap/calculator), [회원사 현황](https://www.kgagolf.or.kr/web/golfCourse/golfCourse).
 - 세종필드: [공식 홈페이지](https://www.sejongcc.co.kr/index).
 - 프린세스: [공식 요금/예약 안내](https://m.princessgc.co.kr/guide/fee).

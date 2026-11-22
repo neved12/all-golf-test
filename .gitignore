@@ -1,0 +1,16 @@
+# Node 산출물
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.log
+
+# 로컬 환경·임시 파일
+.env
+.env.*
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# 협회 가이드북 원본 PDF는 재배포하지 않습니다. 로컬에서만 내려받아 사용하세요.
+data/sources/*.pdf
