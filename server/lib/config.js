@@ -58,6 +58,11 @@ module.exports = {
   sessionSecret,
   usingEphemeralSecret,
   sessionTtlMs: Number(process.env.SESSION_TTL_HOURS || 8) * 60 * 60 * 1000,
+  /* 골프장 담당자 세션: 본사 관리자와 별도 쿠키/토큰 접두사를 쓰고 만료를 따로 둘 수 있다. */
+  partnerSessionTtlMs: Number(process.env.PARTNER_SESSION_TTL_HOURS || 12) * 60 * 60 * 1000,
+  /* 시연용 담당자 계정 자동 생성(선택). 꺼 두면 본사 관리자 화면/스크립트로만 만든다. */
+  seedDemoPartnerAccounts: String(process.env.ALLGOLF_SEED_DEMO_PARTNER_ACCOUNTS || '').toLowerCase() === '1',
+  demoPartnerPassword: String(process.env.DEMO_PARTNER_PASSWORD || '').trim() || 'allgolf-partner-2026',
   dbPath: process.env.ALLGOLF_DB_PATH
     ? path.resolve(rootDir, process.env.ALLGOLF_DB_PATH)
     : path.join(rootDir, 'server', 'data', 'db.json'),

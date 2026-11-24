@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* ALL:GOLF 6단계 서버
+/* ALL:GOLF 7단계 서버
    사용법: node server/index.js   (= npm start)
    - 외부 패키지·네이티브 빌드 없이 Node.js 내장 모듈만 사용한다(Windows 무설치).
    - 같은 주소에서 정적 앱(/, /partner/, /admin/)과 /api 를 함께 제공한다.
@@ -13,6 +13,8 @@ const config = require('./lib/config');
 const { getCatalog } = require('./lib/catalog');
 const { Store } = require('./lib/db');
 const { Auth } = require('./lib/auth');
+const { PartnerAuth } = require('./lib/partner-auth');
+const accounts = require('./lib/accounts');
 const { createApi } = require('./routes/api');
 const helper = require('./lib/http');
 
@@ -46,7 +48,23 @@ function createServer() {
     ttlMs: config.sessionTtlMs,
     usingDefaultPassword: config.usingDefaultPassword
   });
-  const api = createApi({ store, auth, catalog, config });
+  const partnerAuth = new PartnerAuth({
+    secret: config.sessionSecret,
+    ttlMs: config.partnerSessionTtlMs
+  });
+  if (config.seedDemoPartnerAccounts) {
+    try {
+      const result = store.update(db => accounts.seedDemoAccounts(db, { password: config.demoPartnerPassword }));
+      result.then(({ result: made }) => {
+        if (made && made.length) {
+          console.log(`[ALL:GOLF] 시연용 골프장 담당자 계정 ${made.length}개를 새로 만들었습니다(비밀번호 ${config.demoPartnerPassword}).`);
+        }
+      }).catch(error => console.error('[ALL:GOLF] 시연 계정 생성 실패:', error && error.message));
+    } catch (error) {
+      console.error('[ALL:GOLF] 시연 계정 생성 실패:', error && error.message);
+    }
+  }
+  const api = createApi({ store, auth, partnerAuth, catalog, config });
 
   const server = http.createServer(async (req, res) => {
     const started = Date.now();
@@ -108,7 +126,7 @@ function start() {
     const address = server.address();
     const port = address && typeof address === 'object' ? address.port : config.port;
     console.log('');
-    console.log('  ALL:GOLF 6단계 서버 (시연용 · 실제 결제/예약 아님)');
+    console.log('  ALL:GOLF 7단계 서버 (시연용 · 실제 결제/예약 아님)');
     console.log(`  사용자 앱      http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/`);
     console.log(`  골프장 관리자  http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/partner/`);
     console.log(`  본사 관리자    http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/admin/`);
@@ -116,6 +134,10 @@ function start() {
     console.log(`  DB 파일        ${config.dbPath}`);
     console.log(`  골프장 마스터  ${catalog.courses.length}곳 · 기본 제휴 ${catalog.baselinePartnerIds.length}곳`);
     console.log(`  관리자 계정    ${config.adminEmail} / ${config.usingDefaultPassword ? `시연용 기본 비밀번호 ${config.DEMO_ADMIN_PASSWORD}` : '환경변수 ADMIN_PASSWORD'}`);
+    console.log('  골프장 계정    본사 관리자 화면 > 제휴 계정 관리에서 생성 (골프장별 개별 로그인)');
+    if (config.seedDemoPartnerAccounts) {
+      console.log(`  시연 담당자    자동 생성 켜짐 · 비밀번호 ${config.demoPartnerPassword}`);
+    }
     if (config.usingDefaultPassword) {
       console.log('  ⚠ 시연용 기본 비밀번호로 실행 중입니다. .env.example 을 복사해 ADMIN_PASSWORD 를 지정하세요.');
     }

@@ -168,5 +168,29 @@
   const releaseTeeHold=(holdId,ownerId=null)=>{const data=pruneHolds(state());let released=false;Object.keys(data.bookingHolds).forEach(teeId=>{const before=data.bookingHolds[teeId],after=before.filter(hold=>{const match=hold.id===holdId&&(!ownerId||hold.ownerId===ownerId);if(match)released=true;return !match});if(after.length)data.bookingHolds[teeId]=after;else delete data.bookingHolds[teeId]});if(released)save(data);return released};
   const commitTeeHold=(holdId,ownerId)=>{const data=pruneHolds(state());let hold=null,holdKey='';Object.entries(data.bookingHolds).some(([teeId,list])=>{hold=list.find(item=>item.id===holdId&&item.ownerId===ownerId)||null;if(hold)holdKey=teeId;return Boolean(hold)});if(!hold)return {ok:false,reason:'hold_expired'};const storageKey=key(hold.courseId,hold.date),tees=data.teeTimes[storageKey]||[],tee=tees.find(item=>item.id===hold.teeTimeId);if(!tee||tee.closed||tee.remaining<1)return {ok:false,reason:'sold_out'};tee.remaining-=1;if(tee.remaining===0)tee.closed=true;data.bookingHolds[holdKey]=(data.bookingHolds[holdKey]||[]).filter(item=>item.id!==holdId);if(!data.bookingHolds[holdKey].length)delete data.bookingHolds[holdKey];save(data);return {ok:true,tee:{...tee}}};
   const getActiveHolds=(courseId,date,teeTimeId)=>{const data=pruneHolds(state());return (data.bookingHolds[teeTimeId]||[]).filter(hold=>hold.courseId===courseId&&hold.date===date).map(hold=>({...hold}))};
-  window.ALL_GOLF_STORE={OPS_KEY,RESERVATION_KEY,DEFAULT_CANCELLATION_POLICY,MAX_TEAMS_PER_TEE,HOLD_TTL_MS,getTeeTimes,setTeeTimes,upsertTeeTime,deleteTeeTime,recurringPlan,registerRecurringTeeTimes,reserveTee,releaseTee,getRates,setRates,getGreenFeeForDate,getPlayerSurcharge,calculateDeposit,calculateCancellation,getCourseOverride,setCourseOverride,getSpecialOffers,getSpecialOffer,getActiveSpecialOffer,applySpecialOffer,validateSpecialOffer,saveSpecialOffer,setSpecialOfferPaused,deleteSpecialOffer,offerStatus,getReservations,setReservations,cancelReservation,acquireTeeHold,releaseTeeHold,commitTeeHold,getActiveHolds,getWaitlist,saveWait,cancelWait,getNotifications,markNotificationRead};
+  /* 7단계: 서버(골프장 담당자)가 등록한 요금·특가를 화면 계산용 캐시에 합친다.
+     - 서버 티타임 가격은 티타임별 값이 우선이므로 평일/주말 그린피는 비워 둔다.
+     - 같은 골프장의 서버 특가는 이전 서버 특가를 교체하고, 로컬 특가는 건드리지 않는다.
+     - 실패해도 앱을 멈추지 않도록 예외를 밖으로 던지지 않는다. */
+  const applyServerOperations=({courseId,rates,offers}={})=>{
+    try{
+      if(!courseId)return false;
+      const data=state();let changed=false;
+      if(rates&&typeof rates==='object'){
+        const current=data.rates[courseId]||{};
+        const next={...getRates(courseId),...current,...rates,courseId,source:'server'};
+        if(JSON.stringify(next)!==JSON.stringify(current)){data.rates[courseId]=next;changed=true}
+      }
+      if(Array.isArray(offers)){
+        const before=JSON.stringify(data.specialOffers);
+        const kept={};
+        Object.keys(data.specialOffers).forEach(id=>{const item=data.specialOffers[id];if(item&&item.source==='server'&&String(item.courseId)===String(courseId))return;kept[id]=item});
+        offers.forEach(offer=>{if(!offer||!offer.id||offer.deletedAt)return;kept[offer.id]={...offer,source:'server'}});
+        if(JSON.stringify(kept)!==before){data.specialOffers=kept;changed=true}
+      }
+      if(changed){write(OPS_KEY,data);window.dispatchEvent(new CustomEvent('allgolf:datachange'))}
+      return changed;
+    }catch{return false}
+  };
+  window.ALL_GOLF_STORE={OPS_KEY,RESERVATION_KEY,DEFAULT_CANCELLATION_POLICY,MAX_TEAMS_PER_TEE,HOLD_TTL_MS,getTeeTimes,setTeeTimes,upsertTeeTime,deleteTeeTime,recurringPlan,registerRecurringTeeTimes,reserveTee,releaseTee,getRates,setRates,getGreenFeeForDate,getPlayerSurcharge,calculateDeposit,calculateCancellation,getCourseOverride,setCourseOverride,getSpecialOffers,getSpecialOffer,getActiveSpecialOffer,applySpecialOffer,validateSpecialOffer,saveSpecialOffer,setSpecialOfferPaused,deleteSpecialOffer,offerStatus,getReservations,setReservations,cancelReservation,acquireTeeHold,releaseTeeHold,commitTeeHold,getActiveHolds,getWaitlist,saveWait,cancelWait,getNotifications,markNotificationRead,applyServerOperations};
 })();

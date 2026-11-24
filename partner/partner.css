@@ -52,3 +52,8 @@ a.primary.link{display:inline-flex;align-items:center;text-decoration:none;margi
 .mode-chip{display:inline-block;margin:6px 0 2px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;background:#e5e7eb;color:#374151;vertical-align:middle}
 .mode-chip.server{background:#dcfce7;color:#047857}
 .status-card .mode-chip,.receipt-card .mode-chip{margin-left:6px}
+
+/* 7단계: 서버 계정 모드 */
+.server-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.server-meta small{color:var(--muted);font-size:11px}
+.server-meta .mode-chip{margin:0}
