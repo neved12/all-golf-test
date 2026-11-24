@@ -94,5 +94,5 @@ tests/                           브라우저 없이 실행하는 시나리오 �
 - 수동 백업/복구: `npm run db:backup`, `npm run db:restore -- <파일>`
 - 자세한 내용: [`server/data/README.md`](server/data/README.md)
 
-7단계 구현·검증 결과는 함께 전달하는 완료 보고서(`ALLGOLF_7단계_완료보고서.md`)에 정리했습니다.
+7단계 구현·검증 결과는 [ALLGOLF_7단계_완료보고서.md](ALLGOLF_7단계_완료보고서.md) 에 정리했습니다.
 6단계 결과는 [ALLGOLF_6단계_완료보고서.md](ALLGOLF_6단계_완료보고서.md) 에 있습니다.
