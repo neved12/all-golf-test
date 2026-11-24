@@ -50,6 +50,8 @@
   const DEFAULT_PARTNER_IDS = Object.keys(demoCatalog()).filter(id => demoCatalog()[id] && demoCatalog()[id].generatedDemo === false);
   const defaultPartnerIds = () => DEFAULT_PARTNER_IDS.slice();
 
+  /* 6단계: 서버 연동 모드에서 승인된 골프장도 같은 기준으로 포함한다. */
+  const serverSync = () => (window.ALL_GOLF_PARTNER_SYNC && typeof window.ALL_GOLF_PARTNER_SYNC.approvedIds === 'function' ? window.ALL_GOLF_PARTNER_SYNC : null);
   const partnerIds = () => {
     const ids = new Set(DEFAULT_PARTNER_IDS);
     read().forEach(app => {
@@ -57,6 +59,8 @@
       if (app.courseMode === 'new' && app.newCourseId) ids.add(app.newCourseId);
       else if (app.courseId) ids.add(app.courseId);
     });
+    const sync = serverSync();
+    if (sync) sync.approvedIds().forEach(id => ids.add(String(id)));
     return ids;
   };
   const isPartnerCourse = id => partnerIds().has(String(id || ''));
@@ -83,60 +87,72 @@
     };
   };
 
-  /* 승인된 신규 골프장을 사용자 앱의 마스터/시연 데이터로 변환한다. */
-  const approvedCourses = () => read()
-    .filter(app => app.status === 'approved' && app.courseMode === 'new' && app.newCourseId && app.course)
-    .map(app => {
-      const data = app.course || {};
-      const approvedAt = app.decision?.at || app.updatedAt || app.createdAt || null;
-      return {
-        course: {
-          id: app.newCourseId,
-          name: text(data.name),
-          region: text(data.region),
-          city: text(data.city),
-          area: text(data.city),
-          address: text(data.address) || null,
-          operationType: ['public', 'membership', 'mixed'].includes(data.operationType) ? data.operationType : 'public',
-          type: ['public', 'membership', 'mixed'].includes(data.operationType) ? data.operationType : 'public',
-          membershipType: null,
-          holes: Number(data.holes) || null,
-          courses: [],
-          phone: text(data.phone) || null,
-          officialWebsite: text(data.website) || null,
-          officialBookingUrl: null,
-          website: text(data.website) || null,
-          operatingStatus: 'active',
-          verified: false,
-          verification: {},
-          sources: [],
-          source: null,
-          sourceName: 'ALL:GOLF 제휴 신청 승인',
-          sourceAsOf: approvedAt ? String(approvedAt).slice(0, 10) : null,
-          lastVerified: approvedAt ? String(approvedAt).slice(0, 10) : null,
-          lastUpdated: approvedAt ? String(approvedAt).slice(0, 7) : null,
-          greenFee: null,
-          verifiedGreenFee: null,
-          cartFee: null,
-          caddieFee: null,
-          bookingType: 'demo',
-          bookingStatus: 'demo',
-          partner: true,
-          partnered: true,
-          latitude: null,
-          longitude: null,
-          description: '골프장 제휴 신청 승인으로 등록된 시연용 골프장입니다.',
-          amenities: [],
-          cancellationPolicy: null,
-          dataMode: 'demo',
-          partnerApplicationId: app.id
-        },
-        demo: demoObject(app)
-      };
-    });
+  /* 승인된 신규 골프장을 사용자 앱의 마스터/시연 데이터로 변환한다.
+     서버에서 승인된 신규 골프장(6단계)은 partner-sync 캐시에서 합친다. */
+  const approvedCourses = () => {
+    const local = read()
+      .filter(app => app.status === 'approved' && app.courseMode === 'new' && app.newCourseId && app.course)
+      .map(app => {
+        const data = app.course || {};
+        const approvedAt = app.decision?.at || app.updatedAt || app.createdAt || null;
+        return {
+          course: {
+            id: app.newCourseId,
+            name: text(data.name),
+            region: text(data.region),
+            city: text(data.city),
+            area: text(data.city),
+            address: text(data.address) || null,
+            operationType: ['public', 'membership', 'mixed'].includes(data.operationType) ? data.operationType : 'public',
+            type: ['public', 'membership', 'mixed'].includes(data.operationType) ? data.operationType : 'public',
+            membershipType: null,
+            holes: Number(data.holes) || null,
+            courses: [],
+            phone: text(data.phone) || null,
+            officialWebsite: text(data.website) || null,
+            officialBookingUrl: null,
+            website: text(data.website) || null,
+            operatingStatus: 'active',
+            verified: false,
+            verification: {},
+            sources: [],
+            source: null,
+            sourceName: 'ALL:GOLF 제휴 신청 승인',
+            sourceAsOf: approvedAt ? String(approvedAt).slice(0, 10) : null,
+            lastVerified: approvedAt ? String(approvedAt).slice(0, 10) : null,
+            lastUpdated: approvedAt ? String(approvedAt).slice(0, 7) : null,
+            greenFee: null,
+            verifiedGreenFee: null,
+            cartFee: null,
+            caddieFee: null,
+            bookingType: 'demo',
+            bookingStatus: 'demo',
+            partner: true,
+            partnered: true,
+            latitude: null,
+            longitude: null,
+            description: '골프장 제휴 신청 승인으로 등록된 시연용 골프장입니다.',
+            amenities: [],
+            cancellationPolicy: null,
+            dataMode: 'demo',
+            partnerApplicationId: app.id
+          },
+          demo: demoObject(app)
+        };
+      });
+    const sync = serverSync();
+    const remote = sync ? sync.entries() : [];
+    const seen = new Set(local.map(entry => entry.course.id));
+    return [...local, ...remote.filter(entry => entry && entry.course && !seen.has(entry.course.id))];
+  };
 
   const demoTimesFor = (courseId, date) => {
     const app = read().find(item => item.status === 'approved' && item.newCourseId === courseId);
+    const sync = serverSync();
+    if (!app && sync) {
+      const remote = sync.timesFor(courseId, date);
+      if (remote) return remote;
+    }
     if (!app) return [];
     const seed = [...String(courseId)].reduce((sum, char) => sum + char.charCodeAt(0), 0)
       + [...String(date || '')].reduce((sum, char) => sum + char.charCodeAt(0), 0);

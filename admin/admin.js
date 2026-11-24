@@ -1,11 +1,24 @@
 const app=document.querySelector('#admin-app'),modal=document.querySelector('#modal');const AUTH='allGolfAdminAuth',RKEY='allGolfReservations',TKEY='allGolfPartnerTeeTimes',PKEY='allGolfPartners',MKEY='allGolfMembers',QKEY='allGolfInquiries';const masterCourses=window.ALL_GOLF_COURSES||[],demoCourses=window.ALL_GOLF_DEMO_COURSES||{};
+/* 6단계: 서버가 연결되어 있으면 서버 DB·서버 인증을 쓰고, 없으면 기존 정적 시연 모드로 동작한다. */
+const apiClient=window.ALL_GOLF_API||null,partnerSync=window.ALL_GOLF_PARTNER_SYNC||null;
+const isServerMode=()=>Boolean(apiClient&&apiClient.state.mode==='server');
+const adminToken=()=>apiClient?apiClient.getToken():'';
+const modeChip=()=>`<span class="mode-chip ${isServerMode()?'server':'static'}">${isServerMode()?'서버 연동':'정적 시연'}</span>`;
+const modeBanner=()=>`<div class="server-banner ${isServerMode()?'':'static'}"><span>${isServerMode()?'서버 DB에 연결되어 있습니다. 제휴 신청 승인·반려가 서버 인증으로 처리되고 모든 화면에 공유됩니다.':'정적 시연 모드입니다. 데이터는 이 브라우저에만 저장되며 서버로 전송되지 않습니다.'}</span><span>${apiClient?apiClient.modeLabel():'정적 시연'}</span></div>`;
+let serverApplications=null,serverStats=null;
+const loginState=()=>localStorage.getItem(AUTH);
 const isPartnered=id=>window.ALL_GOLF_PARTNER_STORE?window.ALL_GOLF_PARTNER_STORE.isPartnerCourse(id):Boolean(demoCourses[id]);let page='dash',period='today',courseQuery='',courseRegion='전체',courseType='all',courseScope='all',applicationFilter='all';const get=k=>JSON.parse(localStorage.getItem(k)||'[]'),set=(k,v)=>localStorage.setItem(k,JSON.stringify(v)),money=n=>Number(n||0).toLocaleString('ko-KR')+'원',esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function seed(){if(!get(PKEY).length)set(PKEY,[{id:'p1',name:'레이크힐스 용인 CC',manager:'김영업',phone:'010-3000-1000',region:'경기',status:'정상 운영',fee:10,cycle:'매월 15일',created:'2026-08-01'},{id:'p2',name:'우정힐스 CC',manager:'박지훈',phone:'010-3000-1001',region:'충청',status:'정상 운영',fee:12,cycle:'매월 15일',created:'2026-08-02'},{id:'p3',name:'제주 더 시에나 CC',manager:'이민지',phone:'010-3000-1002',region:'제주',status:'심사 중',fee:10,cycle:'매월 말일',created:'2026-08-10'}]);if(!get(MKEY).length)set(MKEY,[{id:'U-1001',name:'김골퍼',phone:'010-1234-5678',email:'golf@example.com',joined:'2026-08-01',status:'정상'},{id:'U-1002',name:'박라운드',phone:'010-2222-3333',email:'round@example.com',joined:'2026-08-03',status:'정상'}]);if(!get(QKEY).length)set(QKEY,[{id:'Q-1',type:'예약',writer:'김골퍼',title:'예약 확인 문의',status:'접수',content:'예약번호 확인 부탁드립니다.',answer:''},{id:'Q-2',type:'제휴 문의',writer:'새로운 CC',title:'제휴 등록 문의',status:'확인 중',content:'제휴 절차가 궁금합니다.',answer:''}])}
-function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div></div>${body}</main></div>`}
+function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['audit','승인 처리 이력'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div>${modeChip()}</div>${modeBanner()}${body}</main></div>`}
 function waitlist(){const items=window.ALL_GOLF_STORE?.getWaitlist()||[],notes=window.ALL_GOLF_STORE?.getNotifications()||[];return shell('예약 대기',`<section class="panel"><div class="head"><h2>시연 대기 ${items.length}건 · 내부 알림 ${notes.length}건</h2></div><p class="notice">같은 브라우저의 시연 데이터만 표시합니다. 실제 고객 알림 발송이나 자동 예약은 없습니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>희망 날짜</th><th>시간대</th><th>인원</th><th>최대 1인 가격</th><th>상태</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(masterCourses.find(c=>c.id===x.courseId)?.name||x.courseId)}</td><td>${esc(x.date)}</td><td>${esc(x.fromTime)}~${esc(x.toTime)}</td><td>${Number(x.people)||0}명</td><td>${money(x.maxPrice)}</td><td>${({active:'대기 중',cancelled:'취소',completed:'예약 완료로 정리',expired:'만료'})[x.status]||x.status}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">대기 신청이 없습니다.</td></tr>'}</tbody></table></div></section>`)}
 
 function courseDirectory(){const normalized=courseQuery.toLocaleLowerCase('ko').replace(/\s/g,'');const rows=masterCourses.filter(course=>{const text=`${course.name}${course.region}${course.city}${course.address||''}`.toLocaleLowerCase('ko').replace(/\s/g,'');return (!normalized||text.includes(normalized))&&(courseRegion==='전체'||course.region===courseRegion)&&(courseType==='all'||course.operationType===courseType)&&(courseScope==='all'||(courseScope==='bookable')===isPartnered(course.id))});const regions=['전체',...new Set(masterCourses.map(course=>course.region))];return shell('전국 골프장',`<section class="panel"><div class="head"><div><h2>골프장 마스터 ${rows.length}곳</h2><p class="admin-caption">공식 공개자료와 기존 검증 데이터를 병합한 조회용 목록입니다. 가격·티타임은 포함하지 않습니다.</p></div><button class="primary" id="download-courses">CSV 다운로드</button></div><div class="course-tools"><input id="course-query" value="${esc(courseQuery)}" placeholder="골프장명·지역·주소 검색"><select id="course-region">${regions.map(value=>`<option ${courseRegion===value?'selected':''}>${value}</option>`).join('')}</select><select id="course-type"><option value="all">전체 운영형태</option><option value="public" ${courseType==='public'?'selected':''}>대중제</option><option value="membership" ${courseType==='membership'?'selected':''}>회원제</option><option value="mixed" ${courseType==='mixed'?'selected':''}>혼합형</option><option value="unknown" ${courseType==='unknown'?'selected':''}>미확인</option></select><select id="course-scope"><option value="all">전체</option><option value="bookable" ${courseScope==='bookable'?'selected':''}>제휴 예약 가능</option><option value="info" ${courseScope==='info'?'selected':''}>정보 제공</option></select></div><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>지역</th><th>주소</th><th>운영형태</th><th>홀</th><th>예약 상태</th><th>출처 기준일</th></tr></thead><tbody>${rows.slice(0,200).map(course=>`<tr><td><b>${course.name}</b><br><small>${course.id}</small></td><td>${course.region} · ${course.city}</td><td>${course.address||'미확인'}</td><td>${course.operationType==='public'?'대중제':course.operationType==='membership'?'회원제':course.operationType==='mixed'?'혼합형':'미확인'}</td><td>${course.holes||'미확인'}</td><td><span class="badge ${isPartnered(course.id)?'':'warn'}">${isPartnered(course.id)?'제휴 예약':'정보 제공'}</span></td><td>${course.sourceAsOf||course.lastVerified||'미확인'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">검색 결과가 없습니다.</td></tr>'}</tbody></table></div>${rows.length>200?'<div class="notice">화면에는 처음 200곳만 표시됩니다. 전체 결과는 CSV로 내려받을 수 있습니다.</div>':''}</section>`)}
-function login(){return `<div class="login"><section class="login-box"><div class="brand"><b>●</b> ALL:GOLF</div><p class="notice">시연용 화면입니다. 실제 운영 시스템이 아니며 입력한 값은 이 브라우저 밖으로 전송되지 않습니다.</p><h1>본사 관리자 로그인</h1><p>제휴 골프장, 예약, 정산을 통합 관리합니다.</p><label class="field">이메일<input id="email" type="email" placeholder="이메일" autocomplete="off"></label><label class="field">비밀번호<input id="password" type="password" placeholder="비밀번호" autocomplete="off"></label><button class="primary" id="login">로그인</button><button class="secondary" id="demo-enter">시연 입장</button><div class="hint">시연용 데모라서 어떤 값이든 입력하면 시연 콘솔로 들어갑니다. 실제 계정 인증은 연결되어 있지 않습니다.</div></section></div>`}
+function login(){
+  if(isServerMode()){
+    return `<div class="login"><section class="login-box"><div class="brand"><b>●</b> ALL:GOLF</div><span class="mode-chip server">서버 연동</span><p class="notice">서버 인증이 필요한 화면입니다. 승인·반려는 서버의 관리자 세션으로만 처리됩니다.</p><h1>본사 관리자 로그인</h1><p>제휴 골프장, 예약, 정산을 통합 관리합니다.</p><label class="field">이메일<input id="email" type="email" placeholder="admin@allgolf.demo" autocomplete="username"></label><label class="field">비밀번호<input id="password" type="password" placeholder="비밀번호" autocomplete="current-password"></label><button class="primary" id="login">로그인</button><div class="form-error" id="login-error" role="alert"></div><div class="hint">비밀번호는 서버의 ADMIN_PASSWORD 환경변수로 설정합니다. 로컬 시연용 기본값은 서버 실행 로그에 표시됩니다.</div></section></div>`;
+  }
+  return `<div class="login"><section class="login-box"><div class="brand"><b>●</b> ALL:GOLF</div><span class="mode-chip">정적 시연</span><p class="notice">시연용 화면입니다. 실제 운영 시스템이 아니며 입력한 값은 이 브라우저 밖으로 전송되지 않습니다.</p><h1>본사 관리자 로그인</h1><p>제휴 골프장, 예약, 정산을 통합 관리합니다.</p><label class="field">이메일<input id="email" type="email" placeholder="이메일" autocomplete="off"></label><label class="field">비밀번호<input id="password" type="password" placeholder="비밀번호" autocomplete="off"></label><button class="primary" id="login">로그인</button><button class="secondary" id="demo-enter">시연 입장</button><div class="hint">정적 시연 모드에서는 어떤 값이든 입력하면 시연 콘솔로 들어갑니다. 서버를 실행하면 실제 서버 인증으로 전환됩니다.</div></section></div>`;
+}
 function dash(){return window.ALL_GOLF_NATIONAL_DASHBOARD.dashboard(shell,masterCourses)}
 function partners(){return window.ALL_GOLF_NATIONAL_DASHBOARD.partnerships(shell,masterCourses)}
 function tees(){let t=get(TKEY);return shell('전체 티타임 관리',`<section class="panel"><div class="head"><h2>전체 티타임</h2><div class="tools"><button class="secondary">골프장 필터</button><button class="secondary">판매 상태</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>지역</th><th>날짜</th><th>티오프</th><th>정가</th><th>판매가</th><th>남은 팀</th><th>인원</th><th>상태</th><th>관리</th></tr></thead><tbody>${t.map(x=>`<tr><td>레이크힐스 용인 CC</td><td>경기</td><td>${x.date}</td><td>${x.time}</td><td>${money(x.regular)}</td><td>${money(x.price)}</td><td>${x.remaining}</td><td>${x.players}인</td><td><span class="badge ${x.closed?'warn':''}">${x.closed?'마감':'판매중'}</span></td><td><button class="secondary" data-tee="${x.id}">가격 수정</button> <button class="danger" data-stop="${x.id}">${x.closed?'판매 재개':'강제 마감'}</button></td></tr>`).join('')}</tbody></table></div></section>`)}
@@ -26,21 +39,134 @@ const val=id=>document.querySelector('#'+id).value,close=()=>modal.innerHTML='';
 function bookingModal(id){let r=get(RKEY).find(x=>x.id===id);modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>예약 상세 및 강제 상태 변경</h2><p><b>${r.number}</b><br>${r.course||'-'} · ${r.date} ${r.time} · ${r.people}인<br>예약자 ${r.booker||r.name||'-'} · ${r.phone||'-'}<br>예약금 ${money(r.deposit)} · 현장 결제 ${money(r.onsite)}</p><label class="field">변경 상태<select id="force-status"><option value="confirmed">예약 확정</option><option value="completed">이용 완료</option><option value="no-show">노쇼</option><option value="cancelled">취소 완료</option></select></label><label class="field">변경 사유<textarea id="force-reason" rows="2" placeholder="강제 변경 사유"></textarea></label><div class="actions"><button class="secondary" data-close>닫기</button><button class="primary" id="force-save">변경 확인</button></div></section></div>`;document.querySelector('[data-close]').onclick=close;document.querySelector('#force-save').onclick=()=>{if(!val('force-reason'))return alert('변경 사유를 입력해주세요.');if(!confirm('예약 상태를 변경할까요?'))return;set(RKEY,get(RKEY).map(x=>x.id===id?{...x,status:val('force-status'),adminReason:val('force-reason')}:x));close();render()}}
 function answerModal(id){let q=get(QKEY).find(x=>x.id===id);modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>문의 답변</h2><p>${q.type} · ${q.writer}<br>${q.content}</p><label class="field">관리자 답변<textarea id="answer" rows="4">${q.answer||''}</textarea></label><div class="actions"><button class="secondary" data-close>닫기</button><button class="primary" id="save-answer">답변 저장</button></div></section></div>`;document.querySelector('[data-close]').onclick=close;document.querySelector('#save-answer').onclick=()=>{set(QKEY,get(QKEY).map(x=>x.id===id?{...x,status:'답변 완료',answer:val('answer')}:x));close();render()}}
 function downloadCourses(){const quote=value=>`"${String(value??'').replaceAll('"','""')}"`;const header=['ID','골프장명','시도','시군구','주소','운영형태','홀수','예약상태','전화번호','출처','기준일'];const rows=masterCourses.map(course=>[course.id,course.name,course.region,course.city,course.address,course.operationType,course.holes,isPartnered(course.id)?'제휴 예약':'정보 제공',course.phone,course.source,course.sourceAsOf||course.lastVerified]);const csv='\uFEFF'+[header,...rows].map(row=>row.map(quote).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=`all-golf-courses-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(url)}
-function bind(){document.querySelectorAll('[data-page]').forEach(x=>x.onclick=()=>{page=x.dataset.page;render()});document.querySelectorAll('[data-period]').forEach(x=>x.onclick=()=>{period=x.dataset.period;render()});document.querySelector('#logout')?.addEventListener('click',()=>{localStorage.removeItem(AUTH);render()});document.querySelector('#new-partner')?.addEventListener('click',partnerModal);document.querySelector('#course-query')?.addEventListener('change',event=>{courseQuery=event.target.value.trim();render()});document.querySelector('#course-region')?.addEventListener('change',event=>{courseRegion=event.target.value;render()});document.querySelector('#course-type')?.addEventListener('change',event=>{courseType=event.target.value;render()});document.querySelector('#course-scope')?.addEventListener('change',event=>{courseScope=event.target.value;render()});document.querySelector('#download-courses')?.addEventListener('click',downloadCourses);document.querySelectorAll('[data-stop]').forEach(x=>x.onclick=()=>{if(!confirm('티타임 판매 상태를 변경할까요?'))return;set(TKEY,get(TKEY).map(t=>t.id===x.dataset.stop?{...t,closed:!t.closed}:t));render()});document.querySelectorAll('[data-tee]').forEach(x=>x.onclick=()=>alert('가격 수정은 제휴사 티타임 관리에서 시연할 수 있습니다.'));document.querySelectorAll('[data-reservation]').forEach(x=>x.onclick=()=>bookingModal(x.dataset.reservation));document.querySelectorAll('[data-refund]').forEach(x=>x.onclick=()=>{if(!confirm('테스트 환불을 승인할까요?'))return;set(RKEY,get(RKEY).map(r=>r.id===x.dataset.refund?{...r,status:'refund-complete'}:r));render()});document.querySelectorAll('[data-reject]').forEach(x=>x.onclick=()=>{let reason=prompt('취소 거절 사유를 입력해주세요.');if(!reason)return;set(RKEY,get(RKEY).map(r=>r.id===x.dataset.reject?{...r,status:'confirmed',rejectReason:reason}:r));render()});document.querySelectorAll('[data-inquiry]').forEach(x=>x.onclick=()=>answerModal(x.dataset.inquiry));document.querySelectorAll('[data-application]').forEach(x=>x.onclick=()=>applicationModal(x.dataset.application));document.querySelectorAll('[data-application-filter]').forEach(x=>x.onclick=()=>{applicationFilter=x.dataset.applicationFilter;render()});document.querySelector('#save-settings')?.addEventListener('click',()=>alert('운영 설정이 저장되었습니다. (시연용)'));document.querySelector('#new-banner')?.addEventListener('click',()=>alert('배너 등록 화면은 시연 안내입니다.'))}
+function bind(){
+  document.querySelectorAll('[data-page]').forEach(x=>x.onclick=()=>{page=x.dataset.page;render()});
+  if(isServerMode()&&page==='applications'){loadApplicationsServer();loadAuditServer('audit-root',20)}
+  if(isServerMode()&&page==='audit'){loadAuditServer('audit-root',200)}
+  document.querySelector('#refresh-applications')?.addEventListener('click',()=>{loadApplicationsServer();loadAuditServer('audit-root',20)});
+  document.querySelector('#refresh-audit')?.addEventListener('click',()=>loadAuditServer('audit-root',200));
+  document.querySelectorAll('[data-application-filter]').forEach(x=>x.onclick=()=>{applicationFilter=x.dataset.applicationFilter;if(isServerMode())loadApplicationsServer();else render()});
+  document.querySelectorAll('[data-application]').forEach(x=>x.onclick=()=>applicationModal(x.dataset.application));
+  document.querySelectorAll('[data-period]').forEach(x=>x.onclick=()=>{period=x.dataset.period;render()});
+  document.querySelector('#logout')?.addEventListener('click',async()=>{localStorage.removeItem(AUTH);if(isServerMode()){try{await apiClient.request('/api/admin/logout',{method:'POST',token:adminToken()})}catch{}apiClient.clearToken()}render()});
+  document.querySelector('#new-partner')?.addEventListener('click',partnerModal);
+  document.querySelector('#course-query')?.addEventListener('change',event=>{courseQuery=event.target.value.trim();render()});
+  document.querySelector('#course-region')?.addEventListener('change',event=>{courseRegion=event.target.value;render()});
+  document.querySelector('#course-type')?.addEventListener('change',event=>{courseType=event.target.value;render()});
+  document.querySelector('#course-scope')?.addEventListener('change',event=>{courseScope=event.target.value;render()});
+  document.querySelector('#download-courses')?.addEventListener('click',downloadCourses);
+  document.querySelectorAll('[data-stop]').forEach(x=>x.onclick=()=>{if(!confirm('티타임 판매 상태를 변경할까요?'))return;set(TKEY,get(TKEY).map(t=>t.id===x.dataset.stop?{...t,closed:!t.closed}:t));render()});
+  document.querySelectorAll('[data-tee]').forEach(x=>x.onclick=()=>alert('가격 수정은 제휴사 티타임 관리에서 시연할 수 있습니다.'));
+  document.querySelectorAll('[data-reservation]').forEach(x=>x.onclick=()=>bookingModal(x.dataset.reservation));
+  document.querySelectorAll('[data-refund]').forEach(x=>x.onclick=()=>{if(!confirm('테스트 환불을 승인할까요?'))return;set(RKEY,get(RKEY).map(r=>r.id===x.dataset.refund?{...r,status:'refund-complete'}:r));render()});
+  document.querySelectorAll('[data-reject]').forEach(x=>x.onclick=()=>{let reason=prompt('취소 거절 사유를 입력해주세요.');if(!reason)return;set(RKEY,get(RKEY).map(r=>r.id===x.dataset.reject?{...r,status:'confirmed',rejectReason:reason}:r));render()});
+  document.querySelectorAll('[data-inquiry]').forEach(x=>x.onclick=()=>answerModal(x.dataset.inquiry));
+  document.querySelector('#save-settings')?.addEventListener('click',()=>alert('운영 설정이 저장되었습니다. (시연용)'));
+  document.querySelector('#new-banner')?.addEventListener('click',()=>alert('배너 등록 화면은 시연 안내입니다.'));
+  document.querySelector('#run-server-guide')?.addEventListener('click',()=>alert('터미널에서 npm start (또는 start-server.bat)를 실행한 뒤 http://127.0.0.1:4173/admin/ 으로 접속하면 서버 모드로 바뀝니다.'));
+}
+function bindApplicationActions(){
+  document.querySelectorAll('[data-application]').forEach(x=>x.onclick=()=>applicationModal(x.dataset.application));
+  document.querySelectorAll('[data-application-filter]').forEach(x=>x.onclick=()=>{applicationFilter=x.dataset.applicationFilter;loadApplicationsServer()});
+}
+function bindLogin(){
+  document.querySelector('#login').onclick=async()=>{
+    if(!isServerMode()){
+      if(!val('email').trim()||!val('password'))return alert('시연 입장을 위해 이메일과 비밀번호를 입력해주세요. 어떤 값이든 괜찮습니다.');
+      enterDemo();return;
+    }
+    const button=document.querySelector('#login');button.disabled=true;button.textContent='로그인 중…';
+    const response=await apiClient.request('/api/admin/login',{method:'POST',body:{email:val('email'),password:val('password')},timeoutMs:10000});
+    button.disabled=false;button.textContent='로그인';
+    if(!response.ok){document.querySelector('#login-error').textContent=(response.error&&response.error.message)||'로그인하지 못했습니다.';return}
+    apiClient.setToken(response.data.token);
+    localStorage.setItem(AUTH,'server');
+    render();
+  };
+  document.querySelector('#password')?.addEventListener('keydown',event=>{if(event.key==='Enter')document.querySelector('#login').click()});
+  document.querySelector('#demo-enter')?.addEventListener('click',enterDemo);
+}
 function enterDemo(){localStorage.setItem(AUTH,'true');render()}
-function render(){if(!localStorage.getItem(AUTH)){app.innerHTML=login();document.querySelector('#login').onclick=()=>{if(!val('email').trim()||!val('password'))return alert('시연 입장을 위해 이메일과 비밀번호를 입력해주세요. 어떤 값이든 괜찮습니다.');enterDemo()};document.querySelector('#demo-enter').onclick=enterDemo;return}let views={dash,courses:courseDirectory,partners,applications,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};app.innerHTML=views[page]();bind();window.ALL_GOLF_NATIONAL_DASHBOARD.bind(render);window.ALL_GOLF_DEMO_TRANSFER?.bind()}
+function render(){
+  if(!loginState()){app.innerHTML=login();bindLogin();return}
+  if(isServerMode()&&loginState()!=='server'){localStorage.removeItem(AUTH);app.innerHTML=login();bindLogin();return}
+  const views={dash,courses:courseDirectory,partners,applications,audit,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};
+  app.innerHTML=(views[page]||dash)();
+  bind();
+  window.ALL_GOLF_NATIONAL_DASHBOARD.bind(render);
+  window.ALL_GOLF_DEMO_TRANSFER?.bind();
+}
+let booted=false;
+async function boot(){
+  if(apiClient){try{await apiClient.init()}catch{}}
+  if(apiClient)apiClient.onModeChange(()=>{if(booted&&!loginState())render()});
+  if(loginState()&&localStorage.getItem(AUTH)==='server'&&!adminToken())localStorage.removeItem(AUTH);
+  if(isServerMode()&&loginState()==='server'){
+    const response=await apiClient.request('/api/admin/session',{token:adminToken(),timeoutMs:6000});
+    if(!response.ok){localStorage.removeItem(AUTH);apiClient.clearToken()}
+  }
+  booted=true;
+  render();
+}
 function applicationRows(all){return `<div class="table-wrap"><table class="table application-table"><thead><tr><th>접수번호</th><th>신청일</th><th>구분</th><th>골프장</th><th>지역</th><th>담당자</th><th>연락처</th><th>상태</th><th>관리</th></tr></thead><tbody>${all.map(app=>`<tr><td><b>${esc(app.id)}</b></td><td>${esc(String(app.createdAt||'').slice(0,10))}</td><td>${esc(app.modeLabel||'')}</td><td>${esc(app.course?.name||'-')}<small class="demo-cell">${esc(app.courseId||app.newCourseId||'')}</small></td><td>${esc(app.course?.region||'')} ${esc(app.course?.city||'')}</td><td>${esc(app.manager?.name||'')}<small class="demo-cell">${esc(app.manager?.role||'-')}</small></td><td>${esc(app.manager?.phone||'')}<small class="demo-cell">${esc(app.manager?.email||'')}</small></td><td><span class="badge ${esc(app.status)}">${esc(app.statusLabel||app.status)}</span></td><td><button class="${app.status==='pending'?'primary':'secondary'}" data-application="${esc(app.id)}">${app.status==='pending'?'검토':'상세'}</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">접수된 제휴 신청이 없습니다.</td></tr>'}</tbody></table></div>`}
 function applications(){
   const api=window.ALL_GOLF_PARTNER_STORE;
+  if(isServerMode()){
+    return shell('제휴 신청 관리',`<section class="panel"><div class="head"><div><h2>골프장 제휴 신청</h2><p class="admin-caption">서버 DB에 접수된 신청입니다. 승인·반려는 서버 인증으로 처리되며 처리 이력이 남습니다.</p></div><button class="secondary" id="refresh-applications">새로고침</button></div><div id="applications-root"><div class="notice">서버에서 불러오는 중…</div></div></section><section class="panel"><div class="head"><div><h2>최근 승인 처리 이력</h2><p class="admin-caption">서버 DB 기록 · 최근 20건</p></div><button class="secondary" data-page="audit">전체 보기</button></div><div id="audit-root"><div class="notice">불러오는 중…</div></div></section>`);
+  }
   if(!api)return shell('제휴 신청 관리','<section class="panel"><div class="empty">제휴 신청 저장소를 불러오지 못했습니다. 페이지를 새로고침해주세요.</div></section>');
   const stats=api.stats(),all=api.list().filter(item=>applicationFilter==='all'||item.status===applicationFilter);
-  return shell('제휴 신청 관리',`<section class="panel"><div class="head"><div><h2>골프장 제휴 신청 ${stats.total}건</h2><p class="admin-caption">partner/ 화면에서 접수된 신청입니다. 승인하면 사용자 앱에서 해당 골프장이 즉시 ‘제휴 예약 가능’ 상태로 전환됩니다.</p></div></div><section class="national-kpis application-kpis">${[['전체 신청',stats.total],['검토 대기',stats.pending],['승인 완료',stats.approved],['반려',stats.rejected]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="tabs application-tabs">${[['all','전체'],['pending','검토 대기'],['approved','승인'],['rejected','반려']].map(([id,label])=>`<button class="${applicationFilter===id?'active':''}" data-application-filter="${id}">${label}</button>`).join('')}</div>${all.length?applicationRows(all):'<div class="empty">조건에 맞는 제휴 신청이 없습니다.</div>'}<p class="notice">승인·반려 결과는 이 브라우저의 시연 저장소에만 저장됩니다. 사용자 앱과 골프장 관리자 화면은 승인 직후 새로고침하면 반영됩니다.</p></section>`)
+  return shell('제휴 신청 관리',`<section class="panel"><div class="head"><div><h2>골프장 제휴 신청 ${stats.total}건</h2><p class="admin-caption">partner/ 화면에서 접수된 신청입니다. 승인하면 사용자 앱에서 해당 골프장이 즉시 ‘제휴 예약 가능’ 상태로 전환됩니다.</p></div><button class="secondary" id="run-server-guide">서버로 전환</button></div><section class="national-kpis application-kpis">${[['전체 신청',stats.total],['검토 대기',stats.pending],['승인 완료',stats.approved],['반려',stats.rejected]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="tabs application-tabs">${[['all','전체'],['pending','검토 대기'],['approved','승인'],['rejected','반려']].map(([id,label])=>`<button class="${applicationFilter===id?'active':''}" data-application-filter="${id}">${label}</button>`).join('')}</div>${all.length?applicationRows(all):'<div class="empty">조건에 맞는 제휴 신청이 없습니다.</div>'}<p class="notice">정적 시연 모드에서는 승인·반려 결과가 이 브라우저에만 저장됩니다. 서버를 실행하면 서버 DB·인증·처리 이력이 함께 동작합니다.</p></section>`)
+}
+function applicationsBody(){
+  const stats=serverStats||{total:0,pending:0,approved:0,rejected:0};
+  const all=serverApplications||[];
+  return `<section class="national-kpis application-kpis">${[['전체 신청',stats.total],['검토 대기',stats.pending],['승인 완료',stats.approved],['반려',stats.rejected]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="tabs application-tabs">${[['all','전체'],['pending','검토 대기'],['approved','승인'],['rejected','반려']].map(([id,label])=>`<button class="${applicationFilter===id?'active':''}" data-application-filter="${id}">${label}</button>`).join('')}</div>${all.length?applicationRows(all):'<div class="empty">조건에 맞는 제휴 신청이 없습니다.</div>'}<p class="notice">서버 DB 기준입니다. 승인하면 공개 제휴 골프장 목록에 반영되어 사용자 앱에서 예약할 수 있습니다.</p>`;
+}
+async function loadApplicationsServer(){
+  const root=document.querySelector('#applications-root');
+  if(!root||!isServerMode())return;
+  root.innerHTML='<div class="notice">서버에서 불러오는 중…</div>';
+  const query=applicationFilter==='all'?'':'?status='+encodeURIComponent(applicationFilter);
+  const response=await apiClient.request('/api/admin/partner-applications'+query,{token:adminToken(),timeoutMs:8000});
+  if(!response.ok){root.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'불러오지 못했습니다.')}</div>`;handleAdminError(response);return}
+  serverApplications=response.data.applications||[];
+  serverStats=response.data.stats||{total:0,pending:0,approved:0,rejected:0};
+  root.innerHTML=applicationsBody();
+  bindApplicationActions();
+}
+function auditRows(logs){
+  const labels={'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'관리자 로그인'};
+  return `<div class="table-wrap"><table class="table"><thead><tr><th>일시</th><th>처리</th><th>접수번호</th><th>골프장</th><th>처리자</th><th>사유·메모</th></tr></thead><tbody>${(logs||[]).map(log=>`<tr><td>${esc(String(log.at||'').slice(0,16).replace('T',' '))}</td><td><span class="badge ${log.action==='application.rejected'?'warn':log.action==='application.approved'?'':'pending'}">${esc(labels[log.action]||log.action)}</span></td><td>${esc(log.applicationId||'-')}</td><td>${esc(log.courseName||'-')}</td><td>${esc((log.actor&&log.actor.email)||'-')}<small class="demo-cell">${esc((log.actor&&log.actor.type)||'')}</small></td><td>${esc(log.reason||log.memo||'-')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">처리 이력이 없습니다.</td></tr>'}</tbody></table></div>`;
+}
+async function loadAuditServer(rootId='audit-root',limit=20){
+  const root=document.querySelector('#'+rootId);
+  if(!root||!isServerMode())return;
+  root.innerHTML='<div class="notice">불러오는 중…</div>';
+  const response=await apiClient.request('/api/admin/audit-logs?limit='+limit,{token:adminToken(),timeoutMs:8000});
+  if(!response.ok){root.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'불러오지 못했습니다.')}</div>`;handleAdminError(response);return}
+  root.innerHTML=auditRows(response.data.logs||[]);
+}
+function audit(){
+  if(!isServerMode()){
+    return shell('승인 처리 이력','<section class="panel"><div class="empty">정적 시연 모드에서는 서버 처리 이력이 없습니다. <code>npm start</code> 로 서버를 실행하면 승인·반려 기록이 남습니다.</div></section>');
+  }
+  return shell('승인 처리 이력',`<section class="panel"><div class="head"><div><h2>제휴 신청 처리 이력</h2><p class="admin-caption">서버 DB에 기록된 접수·승인·반려 이력입니다.</p></div><button class="secondary" id="refresh-audit">새로고침</button></div><div id="audit-root"><div class="notice">불러오는 중…</div></div></section>`);
+}
+function handleAdminError(response){
+  if(!response||!response.status)return;
+  if(response.status===401||response.status===403){
+    localStorage.removeItem(AUTH);apiClient&&apiClient.clearToken();
+    alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
+    render();
+  }
 }
 function applicationDetailRows(app){
   const c=app.course||{},m=app.manager||{},cond=app.conditions||{},amount=value=>value==null||value===''?'미입력':money(value),interval=cond.teeInterval==null?'미입력':`${Number(cond.teeInterval)}분`;
   return `<dl class="application-detail"><div><dt>접수번호</dt><dd>${esc(app.id)}</dd></div><div><dt>신청일시</dt><dd>${esc(String(app.createdAt||'').slice(0,16).replace('T',' '))}</dd></div><div><dt>신청 구분</dt><dd>${esc(app.modeLabel||app.courseMode)}</dd></div><div><dt>골프장</dt><dd>${esc(c.name||'-')}</dd></div><div><dt>지역</dt><dd>${esc(c.region||'-')} ${esc(c.city||'')}</dd></div><div><dt>주소</dt><dd>${esc(c.address||'미입력')}</dd></div><div><dt>운영형태</dt><dd>${c.operationType==='membership'?'회원제':c.operationType==='mixed'?'혼합형':c.operationType==='public'?'대중제':'미확인'}</dd></div><div><dt>홀 수</dt><dd>${c.holes?esc(c.holes)+'홀':'미입력'}</dd></div><div><dt>대표 전화</dt><dd>${esc(c.phone||'미입력')}</dd></div><div><dt>공식 홈페이지</dt><dd>${esc(c.website||'미입력')}</dd></div><div><dt>담당자</dt><dd>${esc(m.name||'-')} ${m.role?`<small>${esc(m.role)}</small>`:''}</dd></div><div><dt>담당자 연락처</dt><dd>${esc(m.phone||'-')}<br><small>${esc(m.email||'-')}</small></dd></div><div><dt>평일/주말 그린피</dt><dd>${amount(cond.weekdayGreenFee)} / ${amount(cond.weekendGreenFee)}</dd></div><div><dt>카트비/캐디피</dt><dd>${amount(cond.cartFee)} / ${amount(cond.caddieFee)}</dd></div><div><dt>티오프 간격</dt><dd>${interval}</dd></div><div class="full"><dt>운영 조건·메모</dt><dd>${esc(cond.memo||'미입력')}</dd></div></dl>`
 }
 function applicationModal(id){
+  if(isServerMode()){return applicationModalServer(id)}
   const api=window.ALL_GOLF_PARTNER_STORE,app=api?.get(id);if(!app)return;
   const decision=app.decision||{};
   modal.innerHTML=`<div class="modal-bg"><section class="modal application-modal"><h2>제휴 신청 상세</h2><p>${esc(app.course?.name||'')} · ${esc(app.statusLabel||app.status)}</p>${applicationDetailRows(app)}${app.status==='pending'?`<div class="decision-box"><h3>검토 처리</h3><label class="field">승인 메모 (선택)<input id="decision-memo" placeholder="승인 시 내부 메모"></label><label class="field">반려 사유 (반려 시 필수)<textarea id="decision-reason" rows="3" placeholder="예: 사업자 정보 확인 불가"></textarea></label><p class="notice">승인하면 이 골프장이 사용자 앱에서 제휴 예약 가능 상태로 전환되고, 골프장 관리자 화면의 골프장 목록에도 추가됩니다.</p><div class="actions"><button class="secondary" data-application-reject>반려</button><button class="primary" data-application-approve>승인</button></div></div>`:`<div class="decision-result"><b>처리 결과 · ${esc(app.statusLabel||app.status)}</b><p>${esc(String(decision.at||'').slice(0,16).replace('T',' '))} · ${esc(decision.by||'본사 관리자')}${decision.reason?`<br>반려 사유: ${esc(decision.reason)}`:''}${decision.memo&&!decision.reason?`<br>메모: ${esc(decision.memo)}`:''}</p></div>`}<div class="modal-actions"><button class="secondary" data-close>닫기</button></div></section></div>`;
@@ -48,4 +174,35 @@ function applicationModal(id){
   document.querySelector('[data-application-approve]')?.addEventListener('click',()=>{if(!confirm('이 신청을 승인할까요?\n승인하면 사용자 앱에서 제휴 예약 가능 골프장으로 전환됩니다.'))return;const result=api.approve(id,{memo:val('decision-memo')});if(!result.ok)return alert(result.message);close();alert('승인되었습니다. 사용자 앱을 새로고침하면 반영됩니다.');render()});
   document.querySelector('[data-application-reject]')?.addEventListener('click',()=>{const reason=val('decision-reason');if(!reason.trim())return alert('반려 사유를 입력해주세요.');if(!confirm('이 신청을 반려할까요?'))return;const result=api.reject(id,{reason});if(!result.ok)return alert(result.message);close();render()});
 }
-seed();render();
+
+/* 서버 모드: 신청 상세를 서버에서 읽고, 승인·반려를 서버 세션으로 요청한다. */
+async function applicationModalServer(id){
+  modal.innerHTML='<div class="modal-bg"><section class="modal application-modal"><h2>제휴 신청 상세</h2><p class="notice">서버에서 불러오는 중…</p></section></div>';
+  const response=await apiClient.request('/api/admin/partner-applications/'+encodeURIComponent(id),{token:adminToken(),timeoutMs:8000});
+  if(!response.ok){close();handleAdminError(response);if(response.status!==401&&response.status!==403)alert((response.error&&response.error.message)||'신청을 불러오지 못했습니다.');return}
+  const app=response.data.application,decision=app.decision||{};
+  const deciding=app.status==='pending';
+  modal.innerHTML=`<div class="modal-bg"><section class="modal application-modal"><h2>제휴 신청 상세</h2><p>${esc(app.course?.name||'')} · ${esc(app.statusLabel||app.status)}</p>${applicationDetailRows(app)}${deciding?`<div class="decision-box"><h3>검토 처리</h3><label class="field">승인 메모 (선택)<input id="decision-memo" placeholder="승인 시 내부 메모"></label><label class="field">반려 사유 (반려 시 필수)<textarea id="decision-reason" rows="3" placeholder="예: 사업자 정보 확인 불가"></textarea></label><p class="notice">승인하면 서버 DB의 공개 제휴 골프장 목록에 반영되어 사용자 앱에서 예약할 수 있습니다. 처리 결과는 이력에 남습니다.</p><div class="actions"><button class="secondary" data-application-reject>반려</button><button class="primary" data-application-approve>승인</button></div></div>`:`<div class="decision-result"><b>처리 결과 · ${esc(app.statusLabel||app.status)}</b><p>${esc(String(decision.at||'').slice(0,16).replace('T',' '))} · ${esc(decision.by||'본사 관리자')}${decision.reason?`<br>반려 사유: ${esc(decision.reason)}`:''}${decision.memo&&!decision.reason?`<br>메모: ${esc(decision.memo)}`:''}</p></div>`}<div class="modal-actions"><button class="secondary" data-close>닫기</button></div></section></div>`;
+  document.querySelector('[data-close]').onclick=close;
+  const decide=async(action)=>{
+    const memo=val('decision-memo')||'',reason=val('decision-reason')||'';
+    if(action==='reject'&&!reason.trim())return alert('반려 사유를 입력해주세요.');
+    if(!confirm(action==='approve'?'이 신청을 승인할까요?\n승인하면 사용자 앱에서 제휴 예약 가능 골프장으로 전환됩니다.':'이 신청을 반려할까요?'))return;
+    const approveButton=document.querySelector('[data-application-approve]'),rejectButton=document.querySelector('[data-application-reject]');
+    if(approveButton)approveButton.disabled=true;if(rejectButton)rejectButton.disabled=true;
+    const result=await apiClient.request(`/api/admin/partner-applications/${encodeURIComponent(id)}/${action}`,{method:'POST',body:action==='approve'?{memo}:{reason},token:adminToken(),timeoutMs:10000});
+    if(approveButton)approveButton.disabled=false;if(rejectButton)rejectButton.disabled=false;
+    if(!result.ok){
+      if(result.status===409){alert('다른 관리자가 먼저 처리했습니다. 목록을 새로고침합니다.');close();render();return}
+      handleAdminError(result);
+      if(result.status!==401&&result.status!==403)alert((result.error&&result.error.message)||'처리하지 못했습니다.');
+      return;
+    }
+    close();render();
+    alert(action==='approve'?'승인되었습니다. 사용자 앱과 골프장 관리자 화면에 반영됩니다.':'반려되었습니다.');
+  };
+  document.querySelector('[data-application-approve]')?.addEventListener('click',()=>decide('approve'));
+  document.querySelector('[data-application-reject]')?.addEventListener('click',()=>decide('reject'));
+}
+
+seed();boot();

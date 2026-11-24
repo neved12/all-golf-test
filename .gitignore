@@ -7,10 +7,19 @@ yarn-error.log*
 # 로컬 환경·임시 파일
 .env
 .env.*
+!.env.example
 .DS_Store
 Thumbs.db
 *.tmp
 *.bak
+
+# 서버 런타임 DB (개인정보가 들어갈 수 있으므로 저장소에 올리지 않는다)
+# 시드/백업 구조는 server/data/README.md 참고
+server/data/db.json
+server/data/db.json.tmp-*
+server/data/*.lock
+server/data/db.corrupt-*.json
+server/data/backups/
 
 # 협회 가이드북 원본 PDF는 재배포하지 않습니다. 로컬에서만 내려받아 사용하세요.
 data/sources/*.pdf

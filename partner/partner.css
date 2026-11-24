@@ -47,3 +47,8 @@ a.primary.link{display:inline-flex;align-items:center;text-decoration:none;margi
 .status-result{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:14px;background:#f8fbfa}
 .status-result h3{margin:8px 0 0;font-size:16px}
 @media(max-width:600px){.apply-view{padding:12px}.apply-card{padding:20px}.receipt-dl div{grid-template-columns:90px 1fr}.apply-actions{justify-content:stretch}.apply-actions>*{flex:1;justify-content:center}}
+
+/* 6단계: 서버 연동 / 정적 시연 구분 */
+.mode-chip{display:inline-block;margin:6px 0 2px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;background:#e5e7eb;color:#374151;vertical-align:middle}
+.mode-chip.server{background:#dcfce7;color:#047857}
+.status-card .mode-chip,.receipt-card .mode-chip{margin-left:6px}

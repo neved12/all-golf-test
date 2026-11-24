@@ -23,3 +23,9 @@
 .decision-result p{margin:6px 0 0}
 .application-modal{width:min(100%,720px)}
 @media(max-width:760px){.application-detail{grid-template-columns:1fr}}
+
+/* 6단계: 서버 연동 / 정적 시연 구분 */
+.mode-chip{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#e5e7eb;color:#374151;vertical-align:middle}
+.mode-chip.server{background:#dcfce7;color:#047857}
+.server-banner{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:12px;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;font-size:12px;color:#065f46}
+.server-banner.static{background:#f9fafb;border-color:#e5e7eb;color:#4b5563}
