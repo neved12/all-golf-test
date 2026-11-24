@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 echo.
-echo  ALL:GOLF 6단계 서버 (시연용 - 실제 결제/예약 아님)
+echo  ALL:GOLF 7단계 서버 (시연용 - 실제 결제/예약 아님)
 echo.
 where node >nul 2>nul
 if errorlevel 1 (

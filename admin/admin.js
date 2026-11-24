@@ -9,7 +9,7 @@ let serverApplications=null,serverStats=null;
 const loginState=()=>localStorage.getItem(AUTH);
 const isPartnered=id=>window.ALL_GOLF_PARTNER_STORE?window.ALL_GOLF_PARTNER_STORE.isPartnerCourse(id):Boolean(demoCourses[id]);let page='dash',period='today',courseQuery='',courseRegion='전체',courseType='all',courseScope='all',applicationFilter='all';const get=k=>JSON.parse(localStorage.getItem(k)||'[]'),set=(k,v)=>localStorage.setItem(k,JSON.stringify(v)),money=n=>Number(n||0).toLocaleString('ko-KR')+'원',esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function seed(){if(!get(PKEY).length)set(PKEY,[{id:'p1',name:'레이크힐스 용인 CC',manager:'김영업',phone:'010-3000-1000',region:'경기',status:'정상 운영',fee:10,cycle:'매월 15일',created:'2026-08-01'},{id:'p2',name:'우정힐스 CC',manager:'박지훈',phone:'010-3000-1001',region:'충청',status:'정상 운영',fee:12,cycle:'매월 15일',created:'2026-08-02'},{id:'p3',name:'제주 더 시에나 CC',manager:'이민지',phone:'010-3000-1002',region:'제주',status:'심사 중',fee:10,cycle:'매월 말일',created:'2026-08-10'}]);if(!get(MKEY).length)set(MKEY,[{id:'U-1001',name:'김골퍼',phone:'010-1234-5678',email:'golf@example.com',joined:'2026-08-01',status:'정상'},{id:'U-1002',name:'박라운드',phone:'010-2222-3333',email:'round@example.com',joined:'2026-08-03',status:'정상'}]);if(!get(QKEY).length)set(QKEY,[{id:'Q-1',type:'예약',writer:'김골퍼',title:'예약 확인 문의',status:'접수',content:'예약번호 확인 부탁드립니다.',answer:''},{id:'Q-2',type:'제휴 문의',writer:'새로운 CC',title:'제휴 등록 문의',status:'확인 중',content:'제휴 절차가 궁금합니다.',answer:''}])}
-function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['audit','승인 처리 이력'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div>${modeChip()}</div>${modeBanner()}${body}</main></div>`}
+function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['accounts','제휴 계정 관리'],['operations','골프장 운영 현황'],['audit','승인 처리 이력'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div>${modeChip()}</div>${modeBanner()}${body}</main></div>`}
 function waitlist(){const items=window.ALL_GOLF_STORE?.getWaitlist()||[],notes=window.ALL_GOLF_STORE?.getNotifications()||[];return shell('예약 대기',`<section class="panel"><div class="head"><h2>시연 대기 ${items.length}건 · 내부 알림 ${notes.length}건</h2></div><p class="notice">같은 브라우저의 시연 데이터만 표시합니다. 실제 고객 알림 발송이나 자동 예약은 없습니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>희망 날짜</th><th>시간대</th><th>인원</th><th>최대 1인 가격</th><th>상태</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(masterCourses.find(c=>c.id===x.courseId)?.name||x.courseId)}</td><td>${esc(x.date)}</td><td>${esc(x.fromTime)}~${esc(x.toTime)}</td><td>${Number(x.people)||0}명</td><td>${money(x.maxPrice)}</td><td>${({active:'대기 중',cancelled:'취소',completed:'예약 완료로 정리',expired:'만료'})[x.status]||x.status}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">대기 신청이 없습니다.</td></tr>'}</tbody></table></div></section>`)}
 
 function courseDirectory(){const normalized=courseQuery.toLocaleLowerCase('ko').replace(/\s/g,'');const rows=masterCourses.filter(course=>{const text=`${course.name}${course.region}${course.city}${course.address||''}`.toLocaleLowerCase('ko').replace(/\s/g,'');return (!normalized||text.includes(normalized))&&(courseRegion==='전체'||course.region===courseRegion)&&(courseType==='all'||course.operationType===courseType)&&(courseScope==='all'||(courseScope==='bookable')===isPartnered(course.id))});const regions=['전체',...new Set(masterCourses.map(course=>course.region))];return shell('전국 골프장',`<section class="panel"><div class="head"><div><h2>골프장 마스터 ${rows.length}곳</h2><p class="admin-caption">공식 공개자료와 기존 검증 데이터를 병합한 조회용 목록입니다. 가격·티타임은 포함하지 않습니다.</p></div><button class="primary" id="download-courses">CSV 다운로드</button></div><div class="course-tools"><input id="course-query" value="${esc(courseQuery)}" placeholder="골프장명·지역·주소 검색"><select id="course-region">${regions.map(value=>`<option ${courseRegion===value?'selected':''}>${value}</option>`).join('')}</select><select id="course-type"><option value="all">전체 운영형태</option><option value="public" ${courseType==='public'?'selected':''}>대중제</option><option value="membership" ${courseType==='membership'?'selected':''}>회원제</option><option value="mixed" ${courseType==='mixed'?'selected':''}>혼합형</option><option value="unknown" ${courseType==='unknown'?'selected':''}>미확인</option></select><select id="course-scope"><option value="all">전체</option><option value="bookable" ${courseScope==='bookable'?'selected':''}>제휴 예약 가능</option><option value="info" ${courseScope==='info'?'selected':''}>정보 제공</option></select></div><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>지역</th><th>주소</th><th>운영형태</th><th>홀</th><th>예약 상태</th><th>출처 기준일</th></tr></thead><tbody>${rows.slice(0,200).map(course=>`<tr><td><b>${course.name}</b><br><small>${course.id}</small></td><td>${course.region} · ${course.city}</td><td>${course.address||'미확인'}</td><td>${course.operationType==='public'?'대중제':course.operationType==='membership'?'회원제':course.operationType==='mixed'?'혼합형':'미확인'}</td><td>${course.holes||'미확인'}</td><td><span class="badge ${isPartnered(course.id)?'':'warn'}">${isPartnered(course.id)?'제휴 예약':'정보 제공'}</span></td><td>${course.sourceAsOf||course.lastVerified||'미확인'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">검색 결과가 없습니다.</td></tr>'}</tbody></table></div>${rows.length>200?'<div class="notice">화면에는 처음 200곳만 표시됩니다. 전체 결과는 CSV로 내려받을 수 있습니다.</div>':''}</section>`)}
@@ -43,6 +43,11 @@ function bind(){
   document.querySelectorAll('[data-page]').forEach(x=>x.onclick=()=>{page=x.dataset.page;render()});
   if(isServerMode()&&page==='applications'){loadApplicationsServer();loadAuditServer('audit-root',20)}
   if(isServerMode()&&page==='audit'){loadAuditServer('audit-root',200)}
+  if(isServerMode()&&page==='accounts'){loadAccountsServer();document.querySelector('#new-partner-account')?.addEventListener('click',()=>{if(!adminCoursesCache.length){apiClient.request('/api/partner-courses',{timeoutMs:6000}).then(response=>{adminCoursesCache=(response.data&&response.data.courses)||[];newAccountModal()})}else newAccountModal()})}
+  if(isServerMode()&&page==='operations'){loadOperationsServer()}
+  document.querySelector('#refresh-accounts')?.addEventListener('click',loadAccountsServer);
+  document.querySelector('#refresh-operations')?.addEventListener('click',loadOperationsServer);
+  document.querySelector('#operations-date')?.addEventListener('change',loadOperationsServer);
   document.querySelector('#refresh-applications')?.addEventListener('click',()=>{loadApplicationsServer();loadAuditServer('audit-root',20)});
   document.querySelector('#refresh-audit')?.addEventListener('click',()=>loadAuditServer('audit-root',200));
   document.querySelectorAll('[data-application-filter]').forEach(x=>x.onclick=()=>{applicationFilter=x.dataset.applicationFilter;if(isServerMode())loadApplicationsServer();else render()});
@@ -87,10 +92,110 @@ function bindLogin(){
   document.querySelector('#demo-enter')?.addEventListener('click',enterDemo);
 }
 function enterDemo(){localStorage.setItem(AUTH,'true');render()}
+/* ===== 7단계: 골프장 담당자 계정·운영 현황 ===== */
+let adminAccounts=[],adminAccountStats=null,adminCoursesCache=[],adminOperations=null,accountsLoading=false,operationsLoading=false;
+function accountStatusBadge(status){return `<span class="badge ${status==='active'?'approved':'rejected'}">${status==='active'?'사용 중':'사용 중지'}</span>`}
+function accountsPage(){
+  if(!isServerMode()){
+    return shell('제휴 계정 관리','<section class="panel"><div class="empty">정적 시연 모드에서는 서버 계정 관리가 없습니다. <code>npm start</code> 로 서버를 실행하면 골프장별 담당자 계정을 만들 수 있습니다.</div></section>');
+  }
+  return shell('제휴 계정 관리',`<section class="panel"><div class="head"><div><h2>골프장 담당자 계정</h2><p class="admin-caption">제휴 승인된 골프장에만 계정을 발급할 수 있습니다. 권한·상태 변경 시 해당 계정의 기존 세션은 즉시 무효화됩니다.</p></div><div class="tools"><button class="secondary" id="refresh-accounts">새로고침</button><button class="primary" id="new-partner-account">+ 계정 생성</button></div></div><div id="accounts-root"><div class="notice">서버에서 불러오는 중…</div></div></section>`)
+}
+async function loadAccountsServer(){
+  const root=document.querySelector('#accounts-root');
+  if(!root||!isServerMode())return;
+  if(accountsLoading)return;
+  accountsLoading=true;
+  const [accountsResponse,coursesResponse]=await Promise.all([
+    apiClient.request('/api/admin/partner-accounts',{token:adminToken(),timeoutMs:8000}),
+    apiClient.request('/api/partner-courses',{timeoutMs:8000})
+  ]);
+  accountsLoading=false;
+  if(!accountsResponse.ok){root.innerHTML=`<div class="form-error">${esc((accountsResponse.error&&accountsResponse.error.message)||'계정을 불러오지 못했습니다.')}</div>`;handleAdminError(accountsResponse);return}
+  adminAccounts=accountsResponse.data.accounts||[];
+  adminAccountStats=accountsResponse.data.stats||{total:0,active:0,disabled:0,courses:0};
+  adminCoursesCache=(coursesResponse.data&&coursesResponse.data.courses)||[];
+  root.innerHTML=accountsBody();
+  bindAccountActions();
+}
+function accountsBody(){
+  const stats=adminAccountStats||{total:0,active:0,disabled:0,courses:0};
+  return `<section class="national-kpis application-kpis">${[['전체 계정',stats.total],['사용 중',stats.active],['사용 중지',stats.disabled],['계정 있는 골프장',stats.courses]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><p class="notice">계정은 골프장별로 분리되며, 담당자는 자기 골프장 티타임·요금·특가만 수정할 수 있습니다. 비밀번호는 scrypt 해시로만 저장되고 화면·API로 다시 조회할 수 없습니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>계정</th><th>골프장</th><th>권한</th><th>상태</th><th>마지막 로그인</th><th>생성일</th><th>관리</th></tr></thead><tbody>${adminAccounts.map(account=>`<tr><td><b>${esc(account.name)}</b><small class="demo-cell">${esc(account.email)}</small><small class="demo-cell">${esc(account.id)}</small></td><td>${esc(account.courseName||account.courseId)}<small class="demo-cell">${esc(account.courseId)}</small></td><td>${esc(account.roleLabel||account.role)}</td><td>${accountStatusBadge(account.status)}</td><td>${esc(String(account.lastLoginAt||'-').slice(0,16).replace('T',' '))}</td><td>${esc(String(account.createdAt||'').slice(0,10))}</td><td><button class="secondary" data-account-toggle="${esc(account.id)}">${account.status==='active'?'사용 중지':'사용 재개'}</button> <button class="secondary" data-account-reset="${esc(account.id)}">비밀번호 재설정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">발급된 담당자 계정이 없습니다. ‘계정 생성’으로 발급하세요.</td></tr>'}</tbody></table></div>`;
+}
+function bindAccountActions(){
+  document.querySelectorAll('[data-account-toggle]').forEach(button=>button.onclick=()=>toggleAccount(button.dataset.accountToggle));
+  document.querySelectorAll('[data-account-reset]').forEach(button=>button.onclick=()=>resetAccountPassword(button.dataset.accountReset));
+}
+function newAccountModal(){
+  if(!adminCoursesCache.length){alert('제휴 승인된 골프장이 없습니다. 먼저 제휴 신청을 승인해주세요.');return}
+  modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>골프장 담당자 계정 생성</h2><p>계정은 제휴 승인된 골프장에 연결됩니다. 초기 비밀번호는 생성 직후 한 번만 표시됩니다.</p><div class="form-grid"><label class="field full">골프장<select id="acc-course">${adminCoursesCache.map(course=>`<option value="${esc(course.id)}">${esc(course.name)} · ${esc(course.region)} ${esc(course.city)}</option>`).join('')}</select></label><label class="field">담당자명<input id="acc-name" maxlength="20" placeholder="홍길동"></label><label class="field">이메일<input id="acc-email" type="email" maxlength="60" placeholder="partner@example.com"></label><label class="field">권한<select id="acc-role"><option value="manager">운영 담당</option><option value="owner">대표 관리자</option><option value="viewer">조회 전용</option></select></label><label class="field">초기 비밀번호<input id="acc-password" type="text" placeholder="비워 두면 자동 생성"></label></div><p class="notice">비밀번호는 8자 이상, 영문과 숫자를 각각 포함해야 합니다. 계정을 만들면 담당자에게 이메일·초기 비밀번호를 직접 전달하세요(시연용).</p><div class="form-error" id="acc-error"></div><div class="actions"><button class="secondary" data-close>닫기</button><button class="primary" id="acc-save">계정 생성</button></div></section></div>`;
+  document.querySelector('[data-close]').onclick=close;
+  document.querySelector('#acc-save').onclick=async()=>{
+    const body={courseId:document.querySelector('#acc-course').value,name:document.querySelector('#acc-name').value,email:document.querySelector('#acc-email').value,role:document.querySelector('#acc-role').value,password:document.querySelector('#acc-password').value};
+    const errorBox=document.querySelector('#acc-error');
+    const button=document.querySelector('#acc-save');button.disabled=true;button.textContent='생성 중…';
+    const response=await apiClient.request('/api/admin/partner-accounts',{method:'POST',body,token:adminToken(),timeoutMs:10000});
+    button.disabled=false;button.textContent='계정 생성';
+    if(!response.ok){errorBox.textContent=(response.error&&response.error.message)||'계정을 만들지 못했습니다.';return}
+    const data=response.data;
+    modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>계정이 생성되었습니다</h2><p>${esc(data.account.name)} · ${esc(data.account.courseName||data.account.courseId)}<br>${esc(data.account.email)} · ${esc(data.account.roleLabel)}</p><div class="notice"><b>초기 비밀번호: ${esc(data.initialPassword)}</b><br>이 값은 지금 이 화면에서만 표시됩니다. 담당자에게 안전하게 전달하세요.</div><p class="notice">요청대로 저장되었습니다. 골프장 담당자는 /partner/ 에서 이 계정으로 로그인합니다.</p><div class="actions"><button class="primary" id="acc-done">확인</button></div></section></div>`;
+    document.querySelector('#acc-done').onclick=()=>{close();loadAccountsServer()};
+  };
+}
+async function toggleAccount(id){
+  const account=adminAccounts.find(item=>item.id===id);if(!account)return;
+  const next=account.status==='active'?'disabled':'active';
+  if(!confirm(next==='disabled'?'이 계정의 사용을 중지할까요?\n기존 로그인 세션도 즉시 무효화됩니다.':'이 계정의 사용을 다시 허용할까요?'))return;
+  const response=await apiClient.request(`/api/admin/partner-accounts/${encodeURIComponent(id)}`,{method:'PATCH',body:{status:next,version:account.version},token:adminToken(),timeoutMs:8000});
+  if(!response.ok){if(response.status===409)alert('다른 곳에서 먼저 변경했습니다. 새로고침합니다.');else alert((response.error&&response.error.message)||'변경하지 못했습니다.');loadAccountsServer();return}
+  loadAccountsServer();
+}
+async function resetAccountPassword(id){
+  const account=adminAccounts.find(item=>item.id===id);if(!account)return;
+  if(!confirm(`${account.email} 계정의 비밀번호를 재설정할까요?\n기존 세션은 즉시 만료됩니다.`))return;
+  const response=await apiClient.request(`/api/admin/partner-accounts/${encodeURIComponent(id)}/reset-password`,{method:'POST',body:{},token:adminToken(),timeoutMs:8000});
+  if(!response.ok){alert((response.error&&response.error.message)||'재설정하지 못했습니다.');return}
+  modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>비밀번호가 재설정되었습니다</h2><p>${esc(account.email)}</p><div class="notice"><b>새 비밀번호: ${esc(response.data.initialPassword)}</b><br>이 값은 지금 이 화면에서만 표시됩니다. 기존 로그인 세션은 모두 만료되었습니다.</div><div class="actions"><button class="primary" id="reset-done">확인</button></div></section></div>`;
+  document.querySelector('#reset-done').onclick=()=>{close();loadAccountsServer()};
+}
+function operationsPage(){
+  if(!isServerMode()){
+    return shell('골프장 운영 현황','<section class="panel"><div class="empty">정적 시연 모드에서는 서버 운영 현황이 없습니다. <code>npm start</code> 로 서버를 실행하세요.</div></section>');
+  }
+  return shell('골프장 운영 현황',`<section class="panel"><div class="head"><div><h2>골프장별 티타임·특가 현황</h2><p class="admin-caption">서버 DB 기준입니다. 골프장 담당자가 수정한 내용과 최근 변경 이력이 함께 표시됩니다.</p></div><div class="tools"><input class="date-picker" id="operations-date" type="date" value="${new Date().toISOString().slice(0,10)}"><button class="secondary" id="refresh-operations">새로고침</button></div></div><div id="operations-root"><div class="notice">서버에서 불러오는 중…</div></div></section>`)
+}
+async function loadOperationsServer(){
+  const root=document.querySelector('#operations-root');
+  if(!root||!isServerMode()||operationsLoading)return;
+  operationsLoading=true;
+  const date=(document.querySelector('#operations-date')&&document.querySelector('#operations-date').value)||new Date().toISOString().slice(0,10);
+  const response=await apiClient.request(`/api/admin/operations?date=${encodeURIComponent(date)}`,{token:adminToken(),timeoutMs:8000});
+  operationsLoading=false;
+  if(!response.ok){root.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'현황을 불러오지 못했습니다.')}</div>`;handleAdminError(response);return}
+  adminOperations=response.data;
+  root.innerHTML=operationsBody(response.data);
+  document.querySelectorAll('[data-ops-tees]').forEach(button=>button.onclick=()=>showOperationsTees(button.dataset.opsTees,button.dataset.opsDate));
+}
+function operationsBody(data){
+  const totals=data.totals||{};
+  const labels={};
+  return `<section class="national-kpis application-kpis">${[['제휴 골프장',totals.courses||0],['등록 티타임',totals.teeTimes||0],['선택일 티타임',totals.teeTimesOnDate||0],['등록 특가',totals.offers||0],['담당자 계정',totals.accounts||0]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>티타임</th><th>${esc(data.date)} 티타임</th><th>특가</th><th>계정</th><th>마지막 수정</th><th>최근 변경</th><th>상세</th></tr></thead><tbody>${(data.courses||[]).map(course=>`<tr><td><b>${esc(course.courseName)}</b><small class="demo-cell">${esc(course.courseId)}</small></td><td>${course.teeTimes.total}건<br><small class="demo-cell">판매 중 ${course.teeTimes.open}건</small></td><td>${course.teeTimes.date}건</td><td>${course.offers.total}건<br><small class="demo-cell">진행 ${course.offers.active} · 예정 ${course.offers.scheduled} · 종료 ${course.offers.ended}</small></td><td>${course.accounts.active}/${course.accounts.total}</td><td>${esc(String(course.lastUpdated||'-').slice(0,16).replace('T',' '))}</td><td>${(course.recent||[]).slice(0,2).map(log=>`<small class="demo-cell">${esc(String(log.at||'').slice(5,16).replace('T',' '))} ${esc(auditLabel(log.action))} · ${esc((log.actor&&log.actor.email)||'')}</small>`).join('')||'-'}</td><td><button class="secondary" data-ops-tees="${esc(course.courseId)}" data-ops-date="${esc(data.date)}">티타임 보기</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">제휴 승인된 골프장이 없습니다.</td></tr>'}</tbody></table></div>`;
+}
+async function showOperationsTees(courseId,date){
+  const response=await apiClient.request(`/api/admin/tee-times?courseId=${encodeURIComponent(courseId)}&date=${encodeURIComponent(date)}`,{token:adminToken(),timeoutMs:8000});
+  if(!response.ok){alert((response.error&&response.error.message)||'티타임을 불러오지 못했습니다.');handleAdminError(response);return}
+  const items=response.data.teeTimes||[];
+  modal.innerHTML=`<div class="modal-bg"><section class="modal application-modal"><h2>${esc(date)} 티타임</h2><p>${esc(courseId)} · 서버 DB 기준</p><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>팀</th><th>그린피</th><th>상태</th><th>수정자</th></tr></thead><tbody>${items.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${tee.capacityTeams}</td><td>${money(tee.greenFee)}</td><td>${esc(tee.statusLabel)}</td><td>${esc((tee.updatedBy&&tee.updatedBy.email)||'-')}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">등록된 티타임이 없습니다.</td></tr>'}</tbody></table></div><div class="modal-actions"><button class="primary" data-close>확인</button></div></section></div>`;
+  document.querySelector('[data-close]').onclick=close;
+}
+function auditLabel(action){
+  return ({'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'본사 로그인','partner.login':'담당자 로그인','partner-account.created':'계정 생성','partner-account.updated':'계정 변경','partner-account.password-reset':'비밀번호 재설정','tee-time.created':'티타임 등록','tee-time.updated':'티타임 수정','tee-time.deleted':'티타임 삭제','tee-time.recurring':'티타임 반복 등록','rates.updated':'요금 수정','special-offer.created':'특가 등록','special-offer.updated':'특가 수정','special-offer.deleted':'특가 삭제'})[action]||action;
+}
+
 function render(){
   if(!loginState()){app.innerHTML=login();bindLogin();return}
   if(isServerMode()&&loginState()!=='server'){localStorage.removeItem(AUTH);app.innerHTML=login();bindLogin();return}
-  const views={dash,courses:courseDirectory,partners,applications,audit,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};
+  const views={dash,courses:courseDirectory,partners,applications,accounts:accountsPage,operations:operationsPage,audit,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};
   app.innerHTML=(views[page]||dash)();
   bind();
   window.ALL_GOLF_NATIONAL_DASHBOARD.bind(render);
@@ -136,8 +241,7 @@ async function loadApplicationsServer(){
   bindApplicationActions();
 }
 function auditRows(logs){
-  const labels={'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'관리자 로그인'};
-  return `<div class="table-wrap"><table class="table"><thead><tr><th>일시</th><th>처리</th><th>접수번호</th><th>골프장</th><th>처리자</th><th>사유·메모</th></tr></thead><tbody>${(logs||[]).map(log=>`<tr><td>${esc(String(log.at||'').slice(0,16).replace('T',' '))}</td><td><span class="badge ${log.action==='application.rejected'?'warn':log.action==='application.approved'?'':'pending'}">${esc(labels[log.action]||log.action)}</span></td><td>${esc(log.applicationId||'-')}</td><td>${esc(log.courseName||'-')}</td><td>${esc((log.actor&&log.actor.email)||'-')}<small class="demo-cell">${esc((log.actor&&log.actor.type)||'')}</small></td><td>${esc(log.reason||log.memo||'-')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">처리 이력이 없습니다.</td></tr>'}</tbody></table></div>`;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th>일시</th><th>처리</th><th>접수번호</th><th>골프장</th><th>처리자</th><th>사유·메모</th></tr></thead><tbody>${(logs||[]).map(log=>`<tr><td>${esc(String(log.at||'').slice(0,16).replace('T',' '))}</td><td><span class="badge ${log.action==='application.rejected'?'warn':log.action==='application.approved'?'':'pending'}">${esc(auditLabel(log.action))}</span></td><td>${esc(log.applicationId||'-')}</td><td>${esc(log.courseName||'-')}</td><td>${esc((log.actor&&log.actor.email)||'-')}<small class="demo-cell">${esc((log.actor&&log.actor.type)||'')}</small></td><td>${esc(log.reason||log.memo||'-')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">처리 이력이 없습니다.</td></tr>'}</tbody></table></div>`;
 }
 async function loadAuditServer(rootId='audit-root',limit=20){
   const root=document.querySelector('#'+rootId);

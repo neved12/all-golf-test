@@ -10,6 +10,7 @@
 
   const STORAGE_BASE = 'allGolfApiBase';
   const TOKEN_KEY = 'allGolfAdminToken';
+  const PARTNER_TOKEN_KEY = 'allGolfPartnerToken';
   const listeners = new Set();
   const state = {
     mode: 'static',      // 'static' | 'server'
@@ -158,6 +159,10 @@
   function getToken() { try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } }
   function setToken(token) { try { sessionStorage.setItem(TOKEN_KEY, String(token || '')); } catch { /* noop */ } }
   function clearToken() { try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* noop */ } }
+  /* 골프장 담당자 세션은 본사 관리자 토큰과 분리해 보관한다. */
+  function getPartnerToken() { try { return sessionStorage.getItem(PARTNER_TOKEN_KEY) || ''; } catch { return ''; } }
+  function setPartnerToken(token) { try { sessionStorage.setItem(PARTNER_TOKEN_KEY, String(token || '')); } catch { /* noop */ } }
+  function clearPartnerToken() { try { sessionStorage.removeItem(PARTNER_TOKEN_KEY); } catch { /* noop */ } }
 
   function modeLabel() {
     if (state.connecting) return '서버 확인 중';
@@ -185,6 +190,9 @@
     getToken,
     setToken,
     clearToken,
+    getPartnerToken,
+    setPartnerToken,
+    clearPartnerToken,
     clearOverride,
     reload() { try { location.reload(); } catch { /* noop */ } }
   };

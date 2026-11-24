@@ -29,3 +29,7 @@
 .mode-chip.server{background:#dcfce7;color:#047857}
 .server-banner{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:12px;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;font-size:12px;color:#065f46}
 .server-banner.static{background:#f9fafb;border-color:#e5e7eb;color:#4b5563}
+
+/* 7단계: 계정·운영 현황 */
+.ops-inline{display:block;color:#a56b00;font-size:9px;margin-top:3px}
+.date-picker{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;color:var(--deep)}

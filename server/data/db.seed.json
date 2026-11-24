@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "meta": {
     "createdAt": null,
     "updatedAt": null,
@@ -8,5 +8,11 @@
   },
   "applications": [],
   "approvedCourses": [],
+  "partnerAccounts": [],
+  "teeTimes": [],
+  "rates": {},
+  "specialOffers": [],
+  "reservations": [],
+  "bookingHolds": [],
   "auditLogs": []
 }

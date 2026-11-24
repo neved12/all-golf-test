@@ -24,7 +24,7 @@ const VIEWS=['dashboard','tees','bookings','rates','course','deals','apply','sta
 let view=VIEWS.includes(hashView())?hashView():'dashboard',applyCourse=hashCourse(),selectedDate=todayISO(),bookingTab='all',teeTab='all',dealTab='all',dealQuery='',dealDate='';
 const money=n=>n==null?'미설정':Number(n).toLocaleString('ko-KR')+'원';
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const currentId=()=>localStorage.getItem(COURSE_KEY)||'cn-gcz-cheonan';
+const currentId=()=>isServerMode()&&serverSession&&serverSession.account?String(serverSession.account.courseId):(localStorage.getItem(COURSE_KEY)||'cn-gcz-cheonan');
 const currentCourse=()=>courses.find(c=>c.id===currentId())||courses[0];
 const isApprovedNewCourse=courseId=>Boolean(partnerApi&&partnerApi.approvedCourses().some(entry=>entry.course.id===courseId));
 const fallbackTimes=(courseId,date=selectedDate)=>{
@@ -307,9 +307,290 @@ function bindStatus(){
   if(preselected){document.querySelector('#s-receipt').value=preselected;const codeField=document.querySelector('#s-code');if(codeField){codeField.value=lastLookupCode||(stored&&stored.id===preselected?stored.code:'')}search(codeField?codeField.value:undefined)}
 }
 
+/* ===== 7단계: 서버 모드 (골프장별 담당자 계정으로 로그인, 서버 CRUD) ===== */
+const PARTNER_TOKEN_KEY='allGolfPartnerToken';
+let serverSession=null,serverData={},serverLoadingKey='',serverBooted=false,serverLastRefresh='';
+const partnerToken=()=>apiClient&&apiClient.getPartnerToken?apiClient.getPartnerToken():'';
+const serverCourse=()=>serverSession&&serverSession.course?serverSession.course:null;
+const serverAccount=()=>serverSession&&serverSession.account?serverSession.account:null;
+const serverMenu=()=>[['dashboard','운영 현황'],['tees','티타임 관리'],['bookings','예약 현황(시연)'],['rates','요금 설정'],['deals','특가 관리'],['course','골프장 정보'],['apply','제휴 신청'],['status','접수 상태']];
+const serverMeta=()=>`<div class="server-meta"><span class="mode-chip server">서버 연동</span><small>마지막 갱신 ${esc(serverLastRefresh||'-')}</small></div>`;
+const invalidateServer=()=>{serverData={};serverLoadingKey=''};
+
+function serverShell(title,body){
+  const course=serverCourse()||currentCourse()||{name:'골프장'};
+  const account=serverAccount();
+  return `<div class="shell"><aside class="sidebar"><div class="brand"><b>●</b> ALL:GOLF</div><small>골프장 운영 시스템 · 서버</small>${serverMenu().map(([id,label])=>`<a href="#${id}" class="side-btn ${view===id?'active':''}" data-view="${id}">${label}</a>`).join('')}<button class="side-btn logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>${esc(course.name)}${account?` · ${esc(account.name)} (${esc(account.roleLabel||'')})`:''}</p></div>${serverMeta()}</div>${body}</main></div>`;
+}
+function serverLogin(message=''){
+  return `<div class="login"><section class="login-card"><div class="brand"><b>●</b> ALL:GOLF</div><span class="mode-chip server">서버 연동</span><h1>골프장 관리자 로그인</h1><p>본사에서 발급한 골프장별 담당자 계정으로 로그인합니다. 계정마다 자기 골프장 데이터만 조회·수정할 수 있습니다.</p><label class="field">이메일<input id="partner-email" type="email" autocomplete="username" placeholder="partner@example.com"></label><label class="field">비밀번호<input id="partner-password" type="password" autocomplete="current-password" placeholder="비밀번호"></label><button class="primary" id="partner-login">로그인</button><div class="form-error" id="partner-login-error" role="alert">${esc(message)}</div><div class="login-links"><button class="link-btn" id="go-apply">골프장 제휴 신청</button><button class="link-btn" id="go-status">접수 상태 조회</button></div><div class="hint">계정이 없으면 본사 관리자에게 발급을 요청하세요. 시연용 계정은 본사 관리자 화면의 ‘제휴 계정 관리’에서 만들 수 있습니다.</div></section></div>`;
+}
+function bindServerLogin(){
+  const submit=async()=>{
+    const email=val('partner-email').trim(),password=val('partner-password');
+    const errorBox=document.querySelector('#partner-login-error');
+    if(!email||!password){errorBox.textContent='이메일과 비밀번호를 입력해주세요.';return}
+    const button=document.querySelector('#partner-login');button.disabled=true;button.textContent='로그인 중…';
+    const response=await apiClient.request('/api/partner/login',{method:'POST',body:{email,password},timeoutMs:10000});
+    button.disabled=false;button.textContent='로그인';
+    if(!response.ok){errorBox.textContent=(response.error&&response.error.message)||'로그인하지 못했습니다.';return}
+    apiClient.setPartnerToken(response.data.token);
+    serverSession={account:response.data.account,course:response.data.course};
+    serverLastRefresh=new Date().toLocaleTimeString('ko-KR');
+    view='dashboard';location.hash='dashboard';invalidateServer();render();
+  };
+  document.querySelector('#partner-login').onclick=submit;
+  document.querySelector('#partner-password').onkeydown=event=>{if(event.key==='Enter')submit()};
+  document.querySelector('#go-apply').onclick=()=>{location.hash='apply';view='apply';render()};
+  document.querySelector('#go-status').onclick=()=>{location.hash='status';view='status';render()};
+}
+async function fetchServerSession(){
+  const response=await apiClient.request('/api/partner/session',{token:partnerToken(),timeoutMs:8000});
+  if(!response.ok){serverSession=null;return false}
+  serverSession={account:response.data.account,course:response.data.course};
+  serverLastRefresh=new Date().toLocaleTimeString('ko-KR');
+  return true;
+}
+async function partnerRequest(pathname,options={}){
+  const response=await apiClient.request(pathname,{...options,token:partnerToken(),timeoutMs:options.timeoutMs||12000});
+  if(response.status===401){serverSession=null;if(apiClient.clearPartnerToken)apiClient.clearPartnerToken()}
+  return response;
+}
+function serverKey(){
+  if(view==='tees'||view==='deals')return `${view}:${selectedDate}`;
+  return view;
+}
+function serverTitle(){
+  return ({dashboard:'운영 현황',tees:'티타임 관리',bookings:'예약 현황',rates:'요금 설정',deals:'특가 관리',course:'골프장 정보'})[view]||'운영 현황';
+}
+function loadingPanel(){return '<section class="panel"><div class="notice">서버에서 불러오는 중…</div></section>'}
+function errorPanel(message){return `<section class="panel"><div class="form-error">${esc(message||'불러오지 못했습니다.')}</div><div class="btn-row"><button class="secondary" id="server-retry">다시 시도</button></div></section>`}
+async function loadServerData(key){
+  const [target,date]=key.split(':');
+  if(target==='dashboard'){
+    const [dash,tees]=await Promise.all([partnerRequest('/api/partner/dashboard'),partnerRequest(`/api/partner/tee-times?date=${encodeURIComponent(date||selectedDate)}`)]);
+    if(!dash.ok)throw new Error((dash.error&&dash.error.message)||'운영 현황을 불러오지 못했습니다.');
+    serverData[key]={dash:dash.data,teeTimes:(tees.data&&tees.data.teeTimes)||[]};
+  }else if(target==='tees'){
+    const response=await partnerRequest(`/api/partner/tee-times?date=${encodeURIComponent(date||selectedDate)}`);
+    if(!response.ok)throw new Error((response.error&&response.error.message)||'티타임을 불러오지 못했습니다.');
+    serverData[key]={teeTimes:response.data.teeTimes||[]};
+  }else if(target==='deals'){
+    const offers=await partnerRequest('/api/partner/special-offers');
+    if(!offers.ok)throw new Error((offers.error&&offers.error.message)||'특가를 불러오지 못했습니다.');
+    const list=offers.data.offers||[];
+    const dates=list.map(item=>item.roundDate).filter(Boolean).sort();
+    const from=dates.length?dates[0]:selectedDate,to=dates.length?dates[dates.length-1]:selectedDate;
+    const range=await partnerRequest(`/api/partner/tee-times?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    serverData[key]={offers:list,teeTimes:(range.data&&range.data.teeTimes)||[]};
+  }else if(target==='rates'){
+    const response=await partnerRequest('/api/partner/rates');
+    if(!response.ok)throw new Error((response.error&&response.error.message)||'요금을 불러오지 못했습니다.');
+    serverData[key]={rates:response.data.rates};
+  }else if(target==='bookings'){
+    serverData[key]={reservations:reservations()};
+  }else if(target==='course'){
+    const response=await partnerRequest('/api/partner/dashboard');
+    if(!response.ok)throw new Error((response.error&&response.error.message)||'골프장 정보를 불러오지 못했습니다.');
+    serverData[key]={dash:response.data};
+  }else{
+    serverData[key]={};
+  }
+  serverLastRefresh=new Date().toLocaleTimeString('ko-KR');
+}
+function renderServer(){
+  if(!serverSession){
+    if(!partnerToken()){
+      /* 세션 저장소가 비어 있어도 HttpOnly 쿠키로 복원될 수 있으므로 한 번 확인한다. */
+      if(!serverBooted){
+        serverBooted=true;
+        app.innerHTML=serverLogin('세션을 확인하는 중입니다…');bindServerLogin();
+        fetchServerSession().then(ok=>{if(!ok)apiClient.clearPartnerToken();render()}).catch(()=>render());
+        return;
+      }
+      app.innerHTML=serverLogin();bindServerLogin();return;
+    }
+    app.innerHTML=serverLogin('세션을 확인하는 중입니다…');
+    bindServerLogin();
+    if(!serverBooted){serverBooted=true;fetchServerSession().then(ok=>{if(!ok)apiClient.clearPartnerToken();render()}).catch(()=>render())}
+    return;
+  }
+  const key=serverKey();
+  if(!serverData[key]){
+    if(serverLoadingKey!==key){
+      serverLoadingKey=key;
+      loadServerData(key).then(()=>{serverLoadingKey='';render()}).catch(error=>{serverLoadingKey='';serverData[key]={error:error&&error.message};render()});
+    }
+    app.innerHTML=serverShell(serverTitle(),loadingPanel());bindServerShell();
+    return;
+  }
+  const data=serverData[key];
+  if(data.error){
+    app.innerHTML=serverShell(serverTitle(),errorPanel(data.error));bindServerShell();
+    document.querySelector('#server-retry')?.addEventListener('click',()=>{invalidateServer();render()});
+    return;
+  }
+  app.innerHTML=serverShell(serverTitle(),serverBody(data));bindServerShell();bindServerView(data);
+}
+function serverBody(data){
+  if(view==='tees')return serverTeesView(data);
+  if(view==='deals')return serverDealsView(data);
+  if(view==='rates')return serverRatesView(data);
+  if(view==='bookings')return serverBookingsView(data);
+  if(view==='course')return serverCourseView(data);
+  return serverDashboardView(data);
+}
+function bindServerShell(){
+  document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;location.hash=view;render()});
+  document.querySelector('#logout')?.addEventListener('click',async()=>{try{await partnerRequest('/api/partner/logout',{method:'POST'})}catch{ }serverSession=null;serverData={};apiClient.clearPartnerToken();location.hash='';view='dashboard';render()});
+}
+function bindServerView(data){
+  document.querySelectorAll('[data-date-change]').forEach(el=>el.onchange=()=>{selectedDate=el.value||todayISO();invalidateServer();render()});
+  document.querySelector('#server-new-tee')?.addEventListener('click',()=>serverTeeModal(null));
+  document.querySelector('#server-recurring-tee')?.addEventListener('click',()=>serverRecurringModal());
+  document.querySelector('#server-refresh')?.addEventListener('click',()=>{invalidateServer();render()});
+  document.querySelectorAll('[data-server-edit-tee]').forEach(el=>el.onclick=()=>serverTeeModal((data.teeTimes||[]).find(item=>item.id===el.dataset.serverEditTee)));
+  document.querySelectorAll('[data-server-toggle-tee]').forEach(el=>el.onclick=()=>toggleServerTee(el.dataset.serverToggleTee,(data.teeTimes||[]).find(item=>item.id===el.dataset.serverToggleTee)));
+  document.querySelectorAll('[data-server-delete-tee]').forEach(el=>el.onclick=()=>deleteServerTee(el.dataset.serverDeleteTee,(data.teeTimes||[]).find(item=>item.id===el.dataset.serverDeleteTee)));
+  document.querySelector('#server-save-rates')?.addEventListener('click',()=>saveServerRates(data.rates));
+  document.querySelector('#server-new-deal')?.addEventListener('click',()=>serverDealModal(null,data.teeTimes||[]));
+  document.querySelectorAll('[data-server-edit-deal]').forEach(el=>el.onclick=()=>serverDealModal((data.offers||[]).find(item=>item.id===el.dataset.serverEditDeal),data.teeTimes||[]));
+  document.querySelectorAll('[data-server-pause-deal]').forEach(el=>el.onclick=()=>pauseServerDeal((data.offers||[]).find(item=>item.id===el.dataset.serverPauseDeal),!(data.offers||[]).find(item=>item.id===el.dataset.serverPauseDeal)?.paused));
+  document.querySelectorAll('[data-server-delete-deal]').forEach(el=>el.onclick=()=>deleteServerDeal((data.offers||[]).find(item=>item.id===el.dataset.serverDeleteDeal)));
+}
+function serverDashboardView(data){
+  const dash=data.dash||{},times=data.teeTimes||[],today=selectedDate||todayISO();
+  const cards=[['등록 티타임',`${dash.teeTimes?dash.teeTimes.total:0}개`],['오늘 티타임',`${times.length}개`],['판매 중 특가',`${dash.offers?dash.offers.active:0}개`],['등록 계정',`${dash.accounts?dash.accounts.active:0}개`]];
+  return `<section class="dashboard-date"><label>운영 날짜 <input class="date-picker" type="date" value="${today}" data-date-change></label><span>서버 DB 기준 · 예약 재고는 시연(브라우저)입니다.</span></section><section class="stats simple-stats">${cards.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><section class="panel"><div class="panel-head"><div><h2>${esc(dash.course?dash.course.name:'')} 운영 현황</h2><p>서버에 저장된 티타임·특가를 불러왔습니다. 마지막 갱신 ${esc(serverLastRefresh)}</p></div><div class="btn-row"><button class="secondary" id="server-refresh">새로고침</button><button class="primary" data-view="tees">티타임 관리</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>그린피</th><th>예약 가능</th><th>상태</th><th>관리</th></tr></thead><tbody>${times.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${money(tee.greenFee)}</td><td>${tee.remaining}/${tee.capacityTeams}팀</td><td><span class="badge ${tee.status==='open'?'active':tee.status==='stopped'?'paused':'closed'}">${esc(tee.statusLabel)}</span></td><td><button class="secondary" data-server-edit-tee="${esc(tee.id)}">수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">이 날짜에 등록된 티타임이 없습니다. ‘티타임 관리’에서 추가하세요.</td></tr>'}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><h2>예약 현황</h2><p>${esc(dash.reservations?dash.reservations.note:'')}</p></div><button class="secondary" data-view="bookings">예약 보기</button></div><div class="notice">${esc(dash.reservations?dash.reservations.note:'')}</div></section>`;
+}
+function serverTeesView(data){
+  const items=data.teeTimes||[];
+  return `<section class="panel"><div class="panel-head"><div><h2>티타임 관리</h2><p>서버에 저장되며 사용자 앱에도 반영됩니다. 예약 재고 잠금은 8단계입니다.</p></div><div class="btn-row"><input class="date-picker" type="date" value="${selectedDate}" data-date-change><button class="secondary" id="server-recurring-tee">날짜 반복 등록</button><button class="primary" id="server-new-tee">+ 티타임 추가</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>예약 가능 팀</th><th>최대 인원</th><th>기본 그린피</th><th>잔여</th><th>상태</th><th>관리</th></tr></thead><tbody>${items.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${tee.capacityTeams}팀</td><td>${tee.maxPlayers}명</td><td>${money(tee.greenFee)}</td><td>${tee.remaining}팀</td><td><span class="badge ${tee.status==='open'?'active':tee.status==='stopped'?'paused':'closed'}">${esc(tee.statusLabel)}</span></td><td><button class="secondary" data-server-edit-tee="${esc(tee.id)}">수정</button> <button class="${tee.status==='open'?'danger':'success'}" data-server-toggle-tee="${esc(tee.id)}">${tee.status==='open'?'판매 중지':'판매 재개'}</button> <button class="danger" data-server-delete-tee="${esc(tee.id)}">삭제</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">등록된 티타임이 없습니다.</td></tr>'}</tbody></table></div><p class="notice">예약·임시확보가 연결된 티타임은 삭제할 수 없습니다(삭제 대신 판매 중지·마감).</p></section>`;
+}
+function serverBookingsView(data){
+  const items=data.reservations||[];
+  return `<section class="panel"><div class="panel-head"><div><h2>예약 현황</h2><p>이 브라우저에서 만든 시연 예약입니다. 서버 예약·재고가 아니며 8단계에서 서버로 이전됩니다.</p></div><button class="secondary" data-view="tees">티타임 관리</button></div><div class="notice">서버 티타임의 잔여 팀과 이 예약 수는 서로 공유되지 않습니다. 화면 표시용 시연 데이터입니다.</div><div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>라운드</th><th>티타임</th><th>예약자</th><th>인원</th><th>예약금</th><th>상태</th></tr></thead><tbody>${items.map(item=>`<tr><td><b>${esc(item.number||item.id)}</b></td><td>${esc(item.dateISO||item.date||'-')}</td><td>${esc(item.time||'-')}</td><td>${esc(item.booker||'-')}</td><td>${Number(item.people)||0}명</td><td>${money(item.paidDeposit??item.deposit)}</td><td>${statusLabel(item.status)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">이 브라우저의 시연 예약이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+}
+function serverRatesView(data){
+  const r=data.rates||{};
+  return `<section class="panel"><div class="panel-head"><div><h2>요금 설정</h2><p>기본·3인·4인 요금과 예약금을 서버에 저장합니다. 고객 앱 계산에 반영됩니다.</p></div><button class="primary" id="server-save-rates">저장</button></div><div class="notice">기본 그린피는 4인 기준 1인 금액입니다. 3인·4인 그린피를 직접 지정하면 그 값이 우선합니다.</div><div class="form-grid"><label class="field">기본 그린피(1인)<input id="sr-base" type="number" min="0" value="${r.baseGreenFee??''}"></label><label class="field">3인 1인 그린피(선택)<input id="sr-three" type="number" min="0" value="${r.threePlayerGreenFee??''}" placeholder="미지정 시 기본 + 추가금"></label><label class="field">3인 1인당 추가금<input id="sr-three-surcharge" type="number" min="0" value="${r.threePlayerSurcharge??0}"></label><label class="field">4인 1인 그린피(선택)<input id="sr-four" type="number" min="0" value="${r.fourPlayerGreenFee??''}" placeholder="미지정 시 기본"></label><label class="field">2인 1인당 추가금<input id="sr-two-surcharge" type="number" min="0" value="${r.twoPlayerSurcharge??0}"></label><label class="field">평일 그린피(선택)<input id="sr-weekday" type="number" min="0" value="${r.weekdayGreenFee??''}" placeholder="미지정 시 기본"></label><label class="field">주말 그린피(선택)<input id="sr-weekend" type="number" min="0" value="${r.weekendGreenFee??''}" placeholder="미지정 시 기본"></label><label class="field">카트비(팀)<input id="sr-cart" type="number" min="0" value="${r.cartFee??''}"></label><label class="field">캐디피(팀)<input id="sr-caddie" type="number" min="0" value="${r.caddieFee??''}"></label><label class="field">예약금 방식<select id="sr-deposit-type"><option value="none" ${r.depositType==='none'?'selected':''}>예약금 없음</option><option value="team" ${r.depositType==='team'?'selected':''}>팀당 고정</option><option value="person" ${!r.depositType||r.depositType==='person'?'selected':''}>1인당</option><option value="percent" ${r.depositType==='percent'?'selected':''}>총액의 %</option></select></label><label class="field">예약금 금액/비율<input id="sr-deposit-value" type="number" min="0" value="${r.depositValue??''}"></label></div><p class="notice">현재 요금 버전 ${esc(String(r.version||0))} · 마지막 수정 ${esc(String(r.updatedAt||'-').slice(0,16).replace('T',' '))}</p></section>`;
+}
+function serverDealsView(data){
+  const offers=data.offers||[];
+  const cards=[['등록 특가',`${offers.length}개`],['진행 중',`${offers.filter(item=>item.status==='active').length}개`],['예정',`${offers.filter(item=>item.status==='scheduled').length}개`]];
+  return `<section class="notice">모든 특가는 시연용 가격이며 실제 판매·정산이 아닙니다. 정상가·특가·할인율은 서버가 계산합니다.</section><section class="stats deal-stats">${cards.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><section class="panel"><div class="panel-head"><div><h2>특가 목록</h2><p>티타임에 연결된 서버 특가입니다. 고객 앱에 할인가로 표시됩니다.</p></div><button class="primary" id="server-new-deal">+ 특가 등록</button></div><div class="table-wrap"><table class="table deal-table"><thead><tr><th>특가명</th><th>라운딩</th><th>정상가</th><th>특가</th><th>할인</th><th>적용 팀</th><th>상태</th><th>관리</th></tr></thead><tbody>${offers.map(offer=>`<tr><td><b>${esc(offer.name)}</b></td><td>${esc(offer.roundDate)}<br>${esc(offer.time)}</td><td><s>${money(offer.regularPrice)}</s></td><td><b class="deal-amount">${money(offer.specialPrice)}</b></td><td>${money(offer.discountAmount)}<br><b>${offer.discountRate}%</b></td><td>${offer.teamLimit}팀</td><td><span class="badge ${esc(offer.status)}">${esc(offer.statusLabel)}</span></td><td><button class="secondary" data-server-edit-deal="${esc(offer.id)}">수정</button> <button class="${offer.paused?'success':'danger'}" data-server-pause-deal="${esc(offer.id)}">${offer.paused?'재개':'중지'}</button> <button class="danger" data-server-delete-deal="${esc(offer.id)}">삭제</button></td></tr>`).join('')||'<tr><td colspan="8" class="empty">등록된 특가가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+}
+function serverCourseView(data){
+  const dash=data.dash||{},course=dash.course||{},account=dash.account||{},master=currentCourse()||{};
+  return `<section class="panel"><div class="panel-head"><div><h2>골프장 정보</h2><p>제휴 승인 정보와 서버 계정입니다.</p></div><span class="mode-chip server">서버 연동</span></div><div class="master-box"><h3>제휴 승인 정보</h3><dl><div><dt>골프장명</dt><dd>${esc(course.name||master.name||'-')}</dd></div><div><dt>지역</dt><dd>${esc(course.region||master.region||'')} ${esc(course.city||master.city||'')}</dd></div><div><dt>주소</dt><dd>${esc(course.address||master.address||'확인 필요')}</dd></div><div><dt>운영형태</dt><dd>${operationLabel(course.operationType||master.operationType)}</dd></div><div><dt>홀 수</dt><dd>${course.holes||master.holes?`${course.holes||master.holes}홀`:'확인 필요'}</dd></div><div><dt>대표 전화</dt><dd>${esc(course.phone||master.phone||'확인 필요')}</dd></div></dl></div><h3 class="subhead">로그인 계정</h3><div class="master-box"><dl><div><dt>담당자</dt><dd>${esc(account.name||'-')}</dd></div><div><dt>이메일</dt><dd>${esc(account.email||'-')}</dd></div><div><dt>권한</dt><dd>${esc(account.roleLabel||'-')}</dd></div><div><dt>상태</dt><dd>${esc(account.statusLabel||'-')}</dd></div><div><dt>마지막 로그인</dt><dd>${esc(String(account.lastLoginAt||'-').slice(0,16).replace('T',' '))}</dd></div></dl></div><p class="notice">계정 추가·비활성화는 본사 관리자만 할 수 있습니다. 골프장 정보 수정은 8단계에서 지원할 예정입니다.</p></section>`;
+}
+const serverNum=id=>{const value=val(id).trim();return value===''?null:Number(value)};
+function invalidateOnError(response){
+  if(!response||!response.status)return;
+  if(response.status===401){serverSession=null;if(apiClient.clearPartnerToken)apiClient.clearPartnerToken();alert((response.error&&response.error.message)||'로그인이 만료되었습니다. 다시 로그인해주세요.');render();return}
+  alert((response.error&&response.error.message)||'요청을 처리하지 못했습니다.');
+}
+function serverTeeModal(tee){
+  const item=tee||{date:selectedDate,time:'07:30',session:'1부',course:'전체',capacityTeams:1,maxPlayers:4,greenFee:150000,status:'open',note:''};
+  modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>${tee?'티타임 수정':'티타임 추가'}</h2><p>${esc((serverCourse()||{}).name||'')} · 서버에 저장됩니다.</p><div class="form-grid"><label class="field">코스명<input id="st-course" maxlength="30" value="${esc(item.course||'전체')}" placeholder="예: 동코스 (전체 가능)"></label><label class="field">라운드 날짜<input id="st-date" type="date" value="${esc(item.date||selectedDate)}"></label><label class="field">티오프 시간<input id="st-time" type="time" value="${esc(item.time||'')}"></label><label class="field">부<select id="st-session">${['1부','2부','3부'].map(name=>`<option ${item.session===name?'selected':''}>${name}</option>`).join('')}</select></label><label class="field">예약 가능 팀 수<input id="st-capacity" type="number" min="1" max="20" value="${item.capacityTeams??1}"></label><label class="field">최대 예약 인원<select id="st-max">${[2,3,4].map(value=>`<option value="${value}" ${Number(item.maxPlayers)===value?'selected':''}>${value}명</option>`).join('')}</select></label><label class="field">기본 그린피(1인)<input id="st-price" type="number" min="0" value="${item.greenFee??0}"></label><label class="field">상태<select id="st-status"><option value="open" ${item.status==='open'?'selected':''}>판매 중</option><option value="stopped" ${item.status==='stopped'?'selected':''}>판매 중지</option><option value="closed" ${item.status==='closed'?'selected':''}>마감</option></select></label><label class="field full">메모(선택)<input id="st-note" maxlength="200" value="${esc(item.note||'')}"></label></div><div class="form-error" id="st-error"></div><div class="modal-actions"><button class="secondary" data-modal-close>닫기</button><button class="primary" id="st-save">저장</button></div></section></div>`;
+  document.querySelector('[data-modal-close]').onclick=closeModal;
+  document.querySelector('#st-save').onclick=async()=>{
+    const date=val('st-date'),time=val('st-time'),hour=Number((time||'00:00').slice(0,2));
+    const error=document.querySelector('#st-error');
+    if(!date||!time){error.textContent='날짜와 티오프 시간을 입력해주세요.';return}
+    const body={course:val('st-course'),date,time,session:val('st-session'),capacityTeams:Number(val('st-capacity')),maxPlayers:Number(val('st-max')),greenFee:Number(val('st-price')),status:val('st-status'),note:val('st-note')};
+    if(hour<4||hour>20){error.textContent='티오프 시간은 04:00~20:00 사이로 입력해주세요.';return}
+    const expected=hour<10?'1부':hour<14?'2부':'3부';
+    if(body.session!==expected){error.textContent=`${time}에 맞는 부는 ${expected}입니다.`;return}
+    const button=document.querySelector('#st-save');button.disabled=true;button.textContent='저장 중…';
+    const response=tee?await partnerRequest(`/api/partner/tee-times/${encodeURIComponent(tee.id)}`,{method:'PATCH',body:{...body,version:tee.version}}):await partnerRequest('/api/partner/tee-times',{method:'POST',body});
+    button.disabled=false;button.textContent='저장';
+    if(!response.ok){error.textContent=(response.error&&response.error.message)||'저장하지 못했습니다.';return}
+    closeModal();invalidateServer();render();
+  };
+}
+function serverRecurringModal(){
+  modal.innerHTML=`<div class="modal-bg"><section class="modal"><h2>날짜 반복 티타임 등록</h2><p>${esc((serverCourse()||{}).name||'')} · 같은 날짜·시간·코스는 건너뜁니다.</p><div class="form-grid"><label class="field">시작 날짜<input id="sr-start" type="date" value="${selectedDate}"></label><label class="field">종료 날짜<input id="sr-end" type="date" value="${selectedDate}"></label><label class="field">코스명<input id="sr-course" maxlength="30" value="전체"></label><label class="field">티오프 시간<input id="sr-time" type="time" value="07:30"></label><label class="field">예약 가능 팀 수<input id="sr-capacity" type="number" min="1" max="20" value="1"></label><label class="field">최대 인원<select id="sr-max">${[2,3,4].map(value=>`<option value="${value}" ${value===4?'selected':''}>${value}명</option>`).join('')}</select></label><label class="field">기본 그린피(1인)<input id="sr-price" type="number" min="0" value="150000"></label><label class="field">상태<select id="sr-status"><option value="open">판매 중</option><option value="stopped">판매 중지</option><option value="closed">마감</option></select></label></div><fieldset class="repeat-days"><legend>반복 요일</legend>${['일','월','화','수','목','금','토'].map((label,index)=>`<label><input type="checkbox" name="server-repeat-weekday" value="${index}" ${index>0&&index<6?'checked':''}> ${label}</label>`).join('')}</fieldset><p class="notice">최대 90일 · 서버에 저장되며 사용자 앱에 반영됩니다.</p><div class="form-error" id="sr-error"></div><div class="modal-actions"><button class="secondary" data-modal-close>닫기</button><button class="primary" id="sr-save">등록</button></div></section></div>`;
+  document.querySelector('[data-modal-close]').onclick=closeModal;
+  document.querySelector('#sr-save').onclick=async()=>{
+    const weekdays=[...modal.querySelectorAll('[name="server-repeat-weekday"]:checked')].map(el=>Number(el.value));
+    const error=document.querySelector('#sr-error');
+    if(!weekdays.length){error.textContent='반복 요일을 하나 이상 선택해주세요.';return}
+    const body={startDate:val('sr-start'),endDate:val('sr-end'),course:val('sr-course'),time:val('sr-time'),capacityTeams:Number(val('sr-capacity')),maxPlayers:Number(val('sr-max')),greenFee:Number(val('sr-price')),status:val('sr-status'),weekdays};
+    const button=document.querySelector('#sr-save');button.disabled=true;button.textContent='등록 중…';
+    const response=await partnerRequest('/api/partner/tee-times/recurring',{method:'POST',body});
+    button.disabled=false;button.textContent='등록';
+    if(!response.ok){error.textContent=(response.error&&response.error.message)||'등록하지 못했습니다.';return}
+    closeModal();invalidateServer();render();
+    alert(`${response.data.created}건 등록, ${response.data.skipped}건 건너뜀`);
+  };
+}
+async function toggleServerTee(id,tee){
+  if(!tee)return;
+  const next=tee.status==='open'?'stopped':'open';
+  if(!confirm(next==='stopped'?'이 티타임의 판매를 중지할까요?':'이 티타임을 다시 판매할까요?'))return;
+  const response=await partnerRequest(`/api/partner/tee-times/${encodeURIComponent(id)}`,{method:'PATCH',body:{version:tee.version,status:next}});
+  if(!response.ok){invalidateOnError(response);return}
+  invalidateServer();render();
+}
+async function deleteServerTee(id,tee){
+  if(!tee)return;
+  if(!confirm('이 티타임을 삭제할까요? 예약·임시확보나 특가가 연결되어 있으면 삭제되지 않습니다.'))return;
+  const response=await partnerRequest(`/api/partner/tee-times/${encodeURIComponent(id)}?version=${encodeURIComponent(tee.version)}`,{method:'DELETE'});
+  if(!response.ok){invalidateOnError(response);return}
+  invalidateServer();render();
+}
+async function saveServerRates(current){
+  const body={baseGreenFee:serverNum('sr-base'),threePlayerGreenFee:serverNum('sr-three'),threePlayerSurcharge:serverNum('sr-three-surcharge')||0,fourPlayerGreenFee:serverNum('sr-four'),twoPlayerSurcharge:serverNum('sr-two-surcharge')||0,weekdayGreenFee:serverNum('sr-weekday'),weekendGreenFee:serverNum('sr-weekend'),cartFee:serverNum('sr-cart'),caddieFee:serverNum('sr-caddie'),depositType:val('sr-deposit-type'),depositValue:serverNum('sr-deposit-value')||0,version:current?current.version:0};
+  if(body.baseGreenFee==null||!Number.isInteger(body.baseGreenFee)||body.baseGreenFee<0){alert('기본 그린피를 0원 이상 숫자로 입력해주세요.');return}
+  const response=await partnerRequest('/api/partner/rates',{method:'PUT',body});
+  if(!response.ok){invalidateOnError(response);return}
+  invalidateServer();render();
+  alert('요금이 저장되었습니다. 고객 앱 계산에 반영됩니다.');
+}
+function serverDealModal(offer,teeTimes){
+  const list=(teeTimes||[]).filter(tee=>tee.status==='open'&&(offer?true:tee.date===selectedDate));
+  if(!list.length){alert('이 날짜에 판매 중인 티타임이 없습니다. 먼저 티타임을 등록해주세요.');return}
+  const selected=list.find(tee=>tee.id===offer?.teeTimeId)||list[0];
+  const now=new Date(),local=value=>`${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}T${String(value.getHours()).padStart(2,'0')}:${String(value.getMinutes()).padStart(2,'0')}`;
+  const start=offer?.saleStartAt?String(offer.saleStartAt).slice(0,16):local(now);
+  const end=offer?.saleEndAt?String(offer.saleEndAt).slice(0,16):local(new Date(Date.now()+86400000));
+  modal.innerHTML=`<div class="modal-bg"><section class="modal deal-modal"><h2>${offer?'특가 수정':'특가 등록'}</h2><p>티타임에 연결되는 서버 특가입니다. 정상가·할인율은 서버가 계산합니다.</p><div class="form-grid"><label class="field">티타임<select id="sd-tee">${list.map(tee=>`<option value="${esc(tee.id)}" ${tee.id===selected.id?'selected':''}>${esc(tee.date)} ${esc(tee.time)} · ${esc(tee.course||'전체')} · ${money(tee.greenFee)}</option>`).join('')}</select></label><label class="field">특가명<input id="sd-name" maxlength="60" value="${esc(offer?.name||'')}" placeholder="예: 평일 오전 한정 특가"></label><label class="field full">설명(선택)<textarea id="sd-description" rows="2">${esc(offer?.description||'')}</textarea></label><label class="field">정상 그린피<input id="sd-regular" type="number" min="1" value="${offer?.regularPrice??selected.greenFee}"></label><label class="field">특가 그린피<input id="sd-special" type="number" min="0" value="${offer?.specialPrice??''}"></label><label class="field">적용 팀 수<input id="sd-team-limit" type="number" min="1" max="20" value="${offer?.teamLimit??selected.capacityTeams}"></label><label class="field">판매 시작<input id="sd-start" type="datetime-local" value="${esc(start)}"></label><label class="field">판매 종료<input id="sd-end" type="datetime-local" value="${esc(end)}"></label><label class="check"><input id="sd-visible" type="checkbox" ${offer?.visible===false?'':'checked'}> 사용자 화면 노출</label><label class="check"><input id="sd-paused" type="checkbox" ${offer?.paused?'checked':''}> 판매 중지</label></div><div class="form-error" id="sd-error"></div><div class="modal-actions"><button class="secondary" data-modal-close>취소</button><button class="primary" id="sd-save">저장</button></div></section></div>`;
+  const syncTee=()=>{const tee=list.find(item=>item.id===val('sd-tee'));if(!tee)return;document.querySelector('#sd-regular').value=tee.greenFee;document.querySelector('#sd-team-limit').max=tee.capacityTeams};
+  document.querySelector('#sd-tee').onchange=syncTee;
+  document.querySelector('[data-modal-close]').onclick=closeModal;
+  document.querySelector('#sd-save').onclick=async()=>{
+    const error=document.querySelector('#sd-error');
+    const body={teeTimeId:val('sd-tee'),name:val('sd-name'),description:val('sd-description'),roundDate:selectedDate,regularPrice:Number(val('sd-regular')),specialPrice:Number(val('sd-special')),teamLimit:Number(val('sd-team-limit')),saleStartAt:val('sd-start'),saleEndAt:val('sd-end'),visible:checked('sd-visible'),paused:checked('sd-paused')};
+    const tee=list.find(item=>item.id===body.teeTimeId);if(tee)body.roundDate=tee.date;
+    if(!body.name||body.name.trim().length<2){error.textContent='특가명을 2자 이상 입력해주세요.';return}
+    if(!Number.isFinite(body.specialPrice)||body.specialPrice>=body.regularPrice){error.textContent='특가 그린피는 정상 그린피보다 낮아야 합니다.';return}
+    if(!body.saleStartAt||!body.saleEndAt){error.textContent='판매 시작·종료 일시를 입력해주세요.';return}
+    const button=document.querySelector('#sd-save');button.disabled=true;button.textContent='저장 중…';
+    const response=offer?await partnerRequest(`/api/partner/special-offers/${encodeURIComponent(offer.id)}`,{method:'PATCH',body:{...body,version:offer.version}}):await partnerRequest('/api/partner/special-offers',{method:'POST',body});
+    button.disabled=false;button.textContent='저장';
+    if(!response.ok){error.textContent=(response.error&&response.error.message)||'저장하지 못했습니다.';return}
+    closeModal();invalidateServer();render();
+  };
+}
+async function pauseServerDeal(offer,paused){
+  if(!offer)return;
+  const response=await partnerRequest(`/api/partner/special-offers/${encodeURIComponent(offer.id)}`,{method:'PATCH',body:{version:offer.version,paused}});
+  if(!response.ok){invalidateOnError(response);return}
+  invalidateServer();render();
+}
+async function deleteServerDeal(offer){
+  if(!offer)return;
+  if(!confirm('이 특가를 삭제할까요? 예약 기록은 보존됩니다.'))return;
+  const response=await partnerRequest(`/api/partner/special-offers/${encodeURIComponent(offer.id)}`,{method:'DELETE'});
+  if(!response.ok){invalidateOnError(response);return}
+  invalidateServer();render();
+}
+
 function render(){
   if(view==='apply'){app.innerHTML=applyPage();bindApply();return}
   if(view==='status'){app.innerHTML=statusPage();bindStatus();return}
+  if(isServerMode()){renderServer();return}
   if(!localStorage.getItem(SESSION)){app.innerHTML=login();bindLogin();return}
   const pages={dashboard,tees:teePage,bookings:bookingsPage,rates:ratesPage,course:coursePage,deals:dealsPage};
   app.innerHTML=(pages[view]||dashboard)();bind();

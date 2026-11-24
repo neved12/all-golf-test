@@ -11,7 +11,7 @@ const { Store } = require('../lib/db');
   const target = await store.backup('manual');
   const status = store.status();
   console.log(`백업 완료: ${target}`);
-  console.log(`신청 ${status.applications}건 · 승인 골프장 ${status.approvedCourses}곳 · 이력 ${status.auditLogs}건`);
+  console.log(`신청 ${status.applications}건 · 승인 골프장 ${status.approvedCourses}곳 · 담당자 계정 ${status.partnerAccounts}개 · 티타임 ${status.teeTimes}건 · 이력 ${status.auditLogs}건`);
 })().catch(error => {
   console.error('백업 실패:', error.message);
   process.exit(1);

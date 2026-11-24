@@ -10,19 +10,27 @@ const path = require('path');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+const SCHEMA_VERSION = 2;
+
 function emptyDatabase() {
   return {
-    version: 1,
+    version: SCHEMA_VERSION,
     meta: { createdAt: new Date().toISOString(), updatedAt: null, revision: 0, sequences: {}, lastBackupDate: null },
     applications: [],
     approvedCourses: [],
+    partnerAccounts: [],
+    teeTimes: [],
+    rates: {},
+    specialOffers: [],
+    reservations: [],
+    bookingHolds: [],
     auditLogs: []
   };
 }
 
 function normalizeDatabase(raw) {
   const db = raw && typeof raw === 'object' ? raw : {};
-  db.version = Number(db.version) || 1;
+  db.version = SCHEMA_VERSION;
   db.meta = db.meta && typeof db.meta === 'object' ? db.meta : {};
   db.meta.createdAt = db.meta.createdAt || new Date().toISOString();
   db.meta.updatedAt = db.meta.updatedAt || null;
@@ -30,6 +38,13 @@ function normalizeDatabase(raw) {
   db.meta.sequences = db.meta.sequences && typeof db.meta.sequences === 'object' ? db.meta.sequences : {};
   db.applications = Array.isArray(db.applications) ? db.applications : [];
   db.approvedCourses = Array.isArray(db.approvedCourses) ? db.approvedCourses : [];
+  /* 7단계 컬렉션: 기존 DB(버전 1)를 읽어도 빈 구조로 자동 보완한다. */
+  db.partnerAccounts = Array.isArray(db.partnerAccounts) ? db.partnerAccounts : [];
+  db.teeTimes = Array.isArray(db.teeTimes) ? db.teeTimes : [];
+  db.rates = db.rates && typeof db.rates === 'object' && !Array.isArray(db.rates) ? db.rates : {};
+  db.specialOffers = Array.isArray(db.specialOffers) ? db.specialOffers : [];
+  db.reservations = Array.isArray(db.reservations) ? db.reservations : [];
+  db.bookingHolds = Array.isArray(db.bookingHolds) ? db.bookingHolds : [];
   db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
   return db;
 }
@@ -96,6 +111,10 @@ class Store {
       applications: db.applications.length,
       pending: db.applications.filter(item => item.status === 'pending').length,
       approvedCourses: db.approvedCourses.length,
+      partnerAccounts: db.partnerAccounts.length,
+      activePartnerAccounts: db.partnerAccounts.filter(item => item.status === 'active').length,
+      teeTimes: db.teeTimes.length,
+      specialOffers: db.specialOffers.filter(item => !item.deletedAt).length,
       auditLogs: db.auditLogs.length,
       revision: db.meta.revision,
       updatedAt: db.meta.updatedAt
@@ -187,7 +206,7 @@ class Store {
   }
 
   maybeDailyBackup(db) {
-    if (!db.applications.length && !db.auditLogs.length) return;
+    if (!db.applications.length && !db.auditLogs.length && !db.teeTimes.length) return;
     const today = new Date().toISOString().slice(0, 10);
     if (db.meta.lastBackupDate === today) return;
     try {
@@ -220,7 +239,16 @@ class Store {
       parsed.meta.revision = (Number(parsed.meta.revision) || 0) + 1;
       parsed.meta.updatedAt = new Date().toISOString();
       this.writeAtomic(parsed);
-      return { restoredFrom: sourceFile, counts: { applications: parsed.applications.length } };
+      return {
+        restoredFrom: sourceFile,
+        counts: {
+          applications: parsed.applications.length,
+          approvedCourses: parsed.approvedCourses.length,
+          partnerAccounts: parsed.partnerAccounts.length,
+          teeTimes: parsed.teeTimes.length,
+          specialOffers: parsed.specialOffers.length
+        }
+      };
     } finally {
       release();
     }

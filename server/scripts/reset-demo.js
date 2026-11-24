@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /* 시연 DB 초기화: npm run db:reset-demo
-   모든 제휴 신청·승인 이력을 지운다. 확인 문구 RESET 을 입력해야 진행한다. */
+   모든 제휴 신청·승인·골프장 계정·티타임·특가 데이터를 지운다. 확인 문구 RESET 을 입력해야 진행한다. */
 
 const fs = require('fs');
 const readline = require('readline');
@@ -12,8 +12,8 @@ const { Store, emptyDatabase } = require('../lib/db');
   const store = new Store({ file: config.dbPath, backupDir: config.backupDir });
   store.init();
   const status = store.status();
-  console.log(`현재 DB: 신청 ${status.applications}건 · 승인 골프장 ${status.approvedCourses}곳 · 이력 ${status.auditLogs}건`);
-  console.log('이 명령은 모든 제휴 신청·승인 이력을 지웁니다. 계속하려면 RESET 을 입력하세요.');
+  console.log(`현재 DB: 신청 ${status.applications}건 · 승인 골프장 ${status.approvedCourses}곳 · 담당자 계정 ${status.partnerAccounts}개 · 티타임 ${status.teeTimes}건 · 이력 ${status.auditLogs}건`);
+  console.log('이 명령은 제휴 신청·승인·담당자 계정·티타임·특가 데이터를 모두 지웁니다. 계속하려면 RESET 을 입력하세요.');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise(resolve => rl.question('> ', resolve));
   rl.close();

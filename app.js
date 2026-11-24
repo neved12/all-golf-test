@@ -8,6 +8,8 @@
 
 /* 1. 데이터 ------------------------------------------------------------------ */
 const partnerStore = window.ALL_GOLF_PARTNER_STORE || null;
+/* 7단계: 골프장 담당자가 서버에 등록한 티타임·요금·특가(읽기 전용 정보) */
+const serverCatalog = window.ALL_GOLF_SERVER_CATALOG || null;
 /* 제휴 승인 골프장(기본 68곳 + 승인된 신청)만 시연 예약 가능으로 노출한다.
    비제휴 골프장은 정보 조회 전용이며, 관리자 승인 즉시 예약 가능 상태로 전환된다. */
 const buildCourseList = () => {
@@ -156,9 +158,23 @@ const demoTimesForDate = (item, iso) => {
   if (item?.partnerDemo && partnerStore?.demoTimesFor) return partnerStore.demoTimesFor(item.id, iso);
   return window.ALL_GOLF_DEMO_FOR_DATE ? window.ALL_GOLF_DEMO_FOR_DATE(item.id, iso) : item.times;
 };
-const rawTimesFor = (item, iso = calendarDate) => item?.demo
-  ? (shared ? shared.getTeeTimes(item.id, iso, demoTimesForDate(item, iso)) : demoTimesForDate(item, iso))
-  : [];
+/* 서버(골프장 담당자)가 등록한 티타임을 우선 사용한다. 이 브라우저의 시연 예약 수만큼만 잔여를 줄여
+   보여 주며, 서버 재고와 실제로 공유되지는 않는다(8단계 범위). */
+const serverTimesFor = (item, iso) => (serverCatalog && serverCatalog.teeTimesFor ? serverCatalog.teeTimesFor(item.id, iso) : null);
+const localTakenTeams = (courseId, iso, time) => (getReservations() || [])
+  .filter(entry => entry.courseId === courseId && entry.dateISO === iso && entry.time === time && entry.status !== 'cancelled')
+  .length;
+const withLocalDemoStock = (item, iso, list) => list.map(entry => {
+  const taken = localTakenTeams(item.id, iso, entry.time);
+  const remaining = Math.max(0, Number(entry.remaining || 0) - taken);
+  return { ...entry, remaining, closed: Boolean(entry.closed) || remaining < 1, serverManaged: true };
+});
+const rawTimesFor = (item, iso = calendarDate) => {
+  if (!item?.demo) return [];
+  const serverTimes = serverTimesFor(item, iso);
+  if (Array.isArray(serverTimes)) return withLocalDemoStock(item, iso, serverTimes);
+  return shared ? shared.getTeeTimes(item.id, iso, demoTimesForDate(item, iso)) : demoTimesForDate(item, iso);
+};
 const timesFor = (item, iso = calendarDate) => rawTimesFor(item, iso).map(entry => {
   const dayPrice = shared?.getGreenFeeForDate ? shared.getGreenFeeForDate(item.id, iso, entry.price) : Number(entry.price);
   const priced = { ...entry, price: dayPrice, regular: dayPrice };
@@ -645,6 +661,7 @@ function detail() {
     <div class="date-row">${dateOptions().map(item => `<button type="button" class="date ${date === item.label ? 'active' : ''}" data-date="${item.label}" data-iso="${item.iso}"><strong>${Number(item.iso.slice(5, 7))}/${Number(item.iso.slice(8, 10))}</strong><span>${weekdayLabels[new Date(`${item.iso}T00:00:00`).getDay()]}</span></button>`).join('')}</div>
     <div class="chips session-chips">${['all', '1부', '2부', '3부'].map(value => `<button class="chip ${detailSession === value ? 'active' : ''}" data-session="${value}">${value === 'all' ? '전체' : value}</button>`).join('')}</div>
     <h3 class="tee-subtitle">시연용 티타임 <small>${sessionTimes.length}개 · ${people}명 기준</small></h3>
+    ${sessionTimes.some(slot => slot.serverManaged) ? '<p class="demo-warning">이 티타임은 골프장이 서버에 등록한 운영 정보입니다. 예약 확정·재고 차감은 이 브라우저의 시연 예약으로만 처리되며 서버 재고와 연동되지 않습니다(8단계).</p>' : ''}
     <div class="time-list">${sessionTimes.length ? sessionTimes.map(slot => {
       const tooSmall = Number(slot.maxPlayers || 4) < people;
       return `<div class="time ${slot.closed ? 'closed-time' : ''} ${tooSmall ? 'unavailable' : ''}">
@@ -660,7 +677,7 @@ function detail() {
 
   <section class="course-info-card" id="course-layout"><h2>코스 정보</h2><p>${esc(courseNames)}</p></section>
 
-  <section class="course-info-card" id="fee-info"><h2>이용요금</h2><dl><div><dt>실제 그린피</dt><dd>${actualGreen}</dd></div><div><dt>시연 그린피</dt><dd>${won(course.demoGreenFee)} / 1인<small>시연 가격 · 실제 판매가 아님</small></dd></div><div><dt>카트비</dt><dd>${rates.cartFee == null ? won(course.demoCartFee) : won(rates.cartFee)} / 팀</dd></div><div><dt>캐디피</dt><dd>${rates.caddieFee == null ? won(course.demoCaddieFee) : won(rates.caddieFee)} / 팀</dd></div><div><dt>3인 플레이</dt><dd>${Number(course.demoThreePlayerSurcharge || 0) ? `1인당 ${won(course.demoThreePlayerSurcharge)} 추가` : '추가금 없음'}</dd></div></dl></section>
+  <section class="course-info-card" id="fee-info"><h2>이용요금</h2><dl><div><dt>실제 그린피</dt><dd>${actualGreen}</dd></div><div><dt>시연 그린피</dt><dd>${won(course.demoGreenFee)} / 1인<small>시연 가격 · 실제 판매가 아님</small></dd></div><div><dt>카트비</dt><dd>${rates.cartFee == null ? won(course.demoCartFee) : won(rates.cartFee)} / 팀</dd></div><div><dt>캐디피</dt><dd>${rates.caddieFee == null ? won(course.demoCaddieFee) : won(rates.caddieFee)} / 팀</dd></div><div><dt>3인 플레이</dt><dd>${(() => { const surcharge = rates.source === 'server' ? Number(rates.threePlayerSurcharge || 0) : Number(course.demoThreePlayerSurcharge || 0); return surcharge ? `1인당 ${won(surcharge)} 추가` : '추가금 없음'; })()}</dd></div></dl></section>
 
   <section class="info-box"><h3>이용 안내</h3><div><span>취소 규정</span><b>${esc(course.cancellationPolicy || '골프장 확인 필요')}</b></div><p class="demo-warning">${demoNotice} · 티타임·가격·잔여팀은 기능 확인을 위한 가상 데이터입니다.</p><small class="source-disclaimer">정보 출처 ${esc(course.sourceName || '공개 자료')} · 기준일 ${esc(course.sourceAsOf || course.lastVerified || '확인 필요')}</small></section>
 
@@ -1503,6 +1520,8 @@ function render() {
   document.querySelectorAll('.bottom-nav button').forEach(button => button.classList.toggle('active', button.dataset.go === active));
   updateNotificationBadge();
   bind();
+  /* 서버 연동 모드면 현재 보고 있는 날짜의 카탈로그를 읽어 캐시한다(응답이 오면 다시 그린다). */
+  if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate);
 }
 
 /* 19. 취소 ------------------------------------------------------------------ */
@@ -1621,6 +1640,12 @@ function boot() {
   window.addEventListener('allgolf:datachange', render);
   window.addEventListener('allgolf:partnerschange', () => { refreshPartnerCourses(); render(); });
   window.addEventListener('allgolf:reservationschange', () => { if (page === 'my' || page === 'reservations' || page === 'waitlist') render(); });
+  window.addEventListener('allgolf:catalogchange', render);
+  window.addEventListener('allgolf:apimodechange', () => {
+    refreshPartnerCourses();
+    if (serverCatalog && serverCatalog.isServer && serverCatalog.isServer()) serverCatalog.ensureDate(calendarDate);
+    render();
+  });
 
   render();
 }
