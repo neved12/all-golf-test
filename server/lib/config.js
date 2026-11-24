@@ -13,6 +13,8 @@ function loadEnvFile(file) {
   if (!fs.existsSync(file)) return false;
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { return false; }
+  /* Windows 메모장이 붙이는 BOM 을 제거한다(첫 줄 키가 무시되지 않도록). */
+  text = text.replace(/^\uFEFF/, '');
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
