@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "meta": {
+    "createdAt": null,
+    "updatedAt": null,
+    "revision": 0,
+    "sequences": {}
+  },
+  "applications": [],
+  "approvedCourses": [],
+  "auditLogs": []
+}

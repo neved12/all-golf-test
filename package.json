@@ -1,0 +1,21 @@
+{
+  "name": "all-golf-test",
+  "version": "6.0.0",
+  "private": true,
+  "description": "ALL:GOLF 시연용 골프 예약 서비스. 정적 데모(GitHub Pages)와 무의존성 Node.js 서버를 함께 제공합니다.",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "test": "node tests/run-scenarios.js && node tests/run-server-scenarios.js",
+    "test:regression": "node tests/run-scenarios.js",
+    "test:server": "node tests/run-server-scenarios.js",
+    "db:backup": "node server/scripts/backup.js",
+    "db:restore": "node server/scripts/restore.js",
+    "db:reset-demo": "node server/scripts/reset-demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

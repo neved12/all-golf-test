@@ -1,6 +1,13 @@
 const app=document.querySelector('#partner-app'),modal=document.querySelector('#modal');
 const store=window.ALL_GOLF_STORE,partnerApi=window.ALL_GOLF_PARTNER_STORE,demos=window.ALL_GOLF_DEMO_COURSES||{};
-const SESSION='allGolfPartnerSessionV1',COURSE_KEY='allGolfPartnerCourseId';
+const SESSION='allGolfPartnerSessionV1',COURSE_KEY='allGolfPartnerCourseId',RECEIPT_KEY='allGolfPartnerReceiptsV1';
+const apiClient=window.ALL_GOLF_API||null,partnerSync=window.ALL_GOLF_PARTNER_SYNC||null;
+/* 6단계: 서버가 연결되어 있으면 서버 DB, 아니면 이 브라우저의 정적 시연 저장소를 쓴다. */
+const isServerMode=()=>Boolean(apiClient&&apiClient.state.mode==='server');
+const modeChip=()=>`<span class="mode-chip ${isServerMode()?'server':'static'}">${isServerMode()?'서버 연동':'정적 시연'}</span>`;
+const modeNote=()=>isServerMode()?'서버 DB와 연결되어 있습니다. 접수·승인 결과가 모든 화면에 공유됩니다.':'정적 시연 모드입니다. 접수 내용은 이 브라우저에만 저장되며 서버로 전송되지 않습니다.';
+const readReceipts=()=>{try{const list=JSON.parse(localStorage.getItem(RECEIPT_KEY)||'[]');return Array.isArray(list)?list:[]}catch{return[]}};
+const rememberReceipt=(application,lookupCode)=>{try{const list=readReceipts().filter(item=>item.id!==application.id);list.unshift({id:application.id,code:lookupCode||'',courseName:application.course&&application.course.name||'',status:application.status,at:new Date().toISOString()});localStorage.setItem(RECEIPT_KEY,JSON.stringify(list.slice(0,8)))}catch{}};
 const hashParts=()=>String(location.hash||'').replace(/^#/,'').split(':');
 const hashView=()=>hashParts()[0]||'';
 const hashCourse=()=>hashParts()[1]||'';
@@ -11,7 +18,7 @@ const partnerCourses=()=>{
   return [...base,...extra];
 };
 let courses=partnerCourses();
-let lastReceipt=null;
+let lastReceipt=null,lastLookupCode='';
 const todayISO=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const VIEWS=['dashboard','tees','bookings','rates','course','deals','apply','status'];
 let view=VIEWS.includes(hashView())?hashView():'dashboard',applyCourse=hashCourse(),selectedDate=todayISO(),bookingTab='all',teeTab='all',dealTab='all',dealQuery='',dealDate='';
@@ -37,7 +44,7 @@ const csvCell=value=>{let text=String(value??'');if(/^[=+\-@]/.test(text))text=`
 const downloadCsv=(filename,rows)=>{const content='\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\r\n'),blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 
 function login(){
-  return `<div class="login"><section class="login-card"><div class="brand"><b>●</b> ALL:GOLF</div><span class="demo-account">시연용 관리자 계정</span><h1>골프장 관리자</h1><p>관리할 골프장을 선택하세요. 제휴 승인된 골프장만 목록에 표시되며, 선택한 골프장의 티타임과 예약만 보입니다.</p><label class="field">골프장<select id="login-course">${courses.map(c=>`<option value="${c.id}" ${c.id===currentId()?'selected':''}>${c.name} · ${c.region} ${c.city}</option>`).join('')||'<option value="">제휴 승인된 골프장이 없습니다</option>'}</select></label><button class="primary" id="enter-partner">관리자 화면 시작</button><div class="login-links"><button class="link-btn" id="go-apply">골프장 제휴 신청</button><button class="link-btn" id="go-status">접수 상태 조회</button></div><div class="hint">실제 인증 서버가 연결되지 않은 시연용 화면입니다.</div></section></div>`;
+  return `<div class="login"><section class="login-card"><div class="brand"><b>●</b> ALL:GOLF</div><span class="demo-account">시연용 관리자 계정</span>${modeChip()}<h1>골프장 관리자</h1><p>관리할 골프장을 선택하세요. 제휴 승인된 골프장만 목록에 표시되며, 선택한 골프장의 티타임과 예약만 보입니다.</p><label class="field">골프장<select id="login-course">${courses.map(c=>`<option value="${c.id}" ${c.id===currentId()?'selected':''}>${c.name} · ${c.region} ${c.city}</option>`).join('')||'<option value="">제휴 승인된 골프장이 없습니다</option>'}</select></label><button class="primary" id="enter-partner">관리자 화면 시작</button><div class="login-links"><button class="link-btn" id="go-apply">골프장 제휴 신청</button><button class="link-btn" id="go-status">접수 상태 조회</button></div><div class="hint">${modeNote()}</div></section></div>`;
 }
 function bindLogin(){
   document.querySelector('#enter-partner').onclick=()=>{const selected=val('login-course');if(!selected)return alert('관리할 골프장이 없습니다. 먼저 제휴 신청 후 본사 승인을 받아주세요.');localStorage.setItem(COURSE_KEY,selected);localStorage.setItem(SESSION,'demo');render()};
@@ -158,6 +165,7 @@ function applyPage(){
   const options=partnerApi.availableCourses().map(c=>`<option value="${esc(c.id)}" ${c.id===applyCourse?'selected':''}>${esc(c.name)} · ${esc(c.region)} ${esc(c.city)}</option>`).join('');
   return `<div class="login apply-view"><section class="login-card apply-card">
     <div class="brand"><b>●</b> ALL:GOLF</div>
+    ${modeChip()}
     <h1>골프장 제휴 신청</h1>
     <p class="apply-lead">ALL:GOLF 제휴를 신청합니다. 접수 후 본사 검토를 거쳐 승인되면 사용자 앱에서 이 골프장의 시연 예약이 열리고, 승인된 골프장만 이 관리자 화면에서 티타임을 운영할 수 있습니다.</p>
     <div class="mode-switch"><button type="button" data-mode="existing" class="active">기존 골프장 선택</button><button type="button" data-mode="new">신규 골프장 직접 입력</button></div>
@@ -193,7 +201,7 @@ function applyPage(){
       <div class="form-error" id="apply-error" role="alert"></div>
       <div class="apply-actions"><a class="secondary" href="../index.html">사용자 앱으로</a><button class="primary" id="apply-submit" type="submit">제휴 신청 접수</button></div>
     </form>
-    <p class="hint">담당자 연락처는 이 브라우저의 시연 저장소에만 저장되며, 시연 데이터 백업 파일에서는 제외됩니다.</p>
+    <p class="hint" id="apply-mode-note">${isServerMode()?'담당자 연락처는 서버 DB에 저장되며, 공개 제휴 골프장 목록에는 표시되지 않습니다.':'담당자 연락처는 이 브라우저의 시연 저장소에만 저장되며, 시연 데이터 백업 파일에서는 제외됩니다.'}</p>
   </section></div>`;
 }
 function bindApply(){
@@ -205,27 +213,50 @@ function bindApply(){
   };
   document.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>setMode(el.dataset.mode));
   setMode('existing');
-  document.querySelector('#apply-form').onsubmit=event=>{
+  const showErrors=(errors,messages)=>{
+    document.querySelector('#apply-error').innerHTML=messages.map(message=>`<span>${esc(message)}</span>`).join('');
+    Object.keys(errors||{}).forEach(key=>{const targetId=FIELD_IDS[key];const field=targetId&&document.querySelector('#'+targetId);if(field){field.classList.add('invalid');field.setAttribute('aria-invalid','true')}});
+    const first=Object.keys(errors||{}).map(key=>FIELD_IDS[key]).find(id=>id&&document.querySelector('#'+id));
+    if(first){const field=document.querySelector('#'+first);field.scrollIntoView?.({block:'center'});field.focus?.()}
+  };
+  const showReceipt=(application,lookupCode)=>{
+    lastReceipt=application.id;lastLookupCode=lookupCode||'';
+    app.innerHTML=receiptCard(application,lookupCode);
+    document.querySelector('#receipt-status').onclick=()=>{location.hash=`status:${application.id}`;view='status';render()};
+  };
+  document.querySelector('#apply-form').onsubmit=async event=>{
     event.preventDefault();
     document.querySelectorAll('.invalid').forEach(el=>el.classList.remove('invalid'));
     document.querySelector('#apply-error').textContent='';
     const input={courseMode:mode,courseId:val('a-course'),courseName:val('a-name'),region:val('a-region'),city:val('a-city'),address:val('a-address'),holes:val('a-holes'),operationType:val('a-type'),coursePhone:val('a-course-phone'),website:val('a-website'),managerName:val('a-manager'),managerRole:val('a-role'),managerPhone:val('a-manager-phone'),managerEmail:val('a-email'),weekdayGreenFee:val('a-weekday'),weekendGreenFee:val('a-weekend'),cartFee:val('a-cart'),caddieFee:val('a-caddie'),teeInterval:val('a-interval'),memo:val('a-memo'),agree:checked('a-agree')};
-    const result=partnerApi.submit(input);
-    if(!result.ok){
-      const messages=Object.keys(result.errors||{}).map(key=>result.errors[key]);
-      document.querySelector('#apply-error').innerHTML=messages.map(message=>`<span>${esc(message)}</span>`).join('');
-      Object.keys(result.errors||{}).forEach(key=>{const targetId=FIELD_IDS[key];const field=targetId&&document.querySelector('#'+targetId);if(field){field.classList.add('invalid');field.setAttribute('aria-invalid','true')}});
-      const first=Object.keys(result.errors||{}).map(key=>FIELD_IDS[key]).find(id=>id&&document.querySelector('#'+id));
-      if(first){const field=document.querySelector('#'+first);field.scrollIntoView?.({block:'center'});field.focus?.()}
+    if(isServerMode()){
+      const button=document.querySelector('#apply-submit');
+      if(button){button.disabled=true;button.textContent='접수 중…'}
+      const response=await apiClient.request('/api/partner-applications',{method:'POST',body:input,timeoutMs:12000});
+      if(button){button.disabled=false;button.textContent='제휴 신청 접수'}
+      if(!response.ok){
+        const error=(response.data&&response.data.error)||{};
+        const errors=(error.details&&error.details.errors)||{};
+        const messages=Object.keys(errors).length?Object.keys(errors).map(key=>errors[key]):[error.message||'신청을 접수하지 못했습니다.'];
+        showErrors(errors,messages);
+        if(response.status===409)document.querySelector('#apply-error').insertAdjacentHTML('beforeend','<span>이미 접수된 건은 ‘접수 상태 조회’에서 확인할 수 있습니다.</span>');
+        return;
+      }
+      rememberReceipt(response.data.application,response.data.lookupCode);
+      showReceipt(response.data.application,response.data.lookupCode);
       return;
     }
-    lastReceipt=result.application.id;
-    app.innerHTML=receiptCard(result.application);
-    document.querySelector('#receipt-status').onclick=()=>{location.hash=`status:${result.application.id}`;view='status';render()};
+    const result=partnerApi.submit(input);
+    if(!result.ok){
+      showErrors(result.errors,Object.keys(result.errors||{}).map(key=>result.errors[key]));
+      return;
+    }
+    rememberReceipt(result.application,'');
+    showReceipt(result.application,'');
   };
 }
-function receiptCard(application){
-  return `<div class="login apply-view"><section class="login-card receipt-card"><div class="brand"><b>●</b> ALL:GOLF</div><span class="receipt-badge">접수 완료</span><h1>${esc(application.id)}</h1><p><b>${esc(application.course?.name||'')}</b> 제휴 신청이 접수되었습니다. 본사 검토 후 승인되면 사용자 앱에서 이 골프장의 시연 예약이 열립니다.</p><dl class="receipt-dl"><div><dt>골프장</dt><dd>${esc(application.course?.name||'-')} · ${esc(application.course?.region||'')} ${esc(application.course?.city||'')}</dd></div><div><dt>신청 구분</dt><dd>${application.courseMode==='new'?'신규 골프장':'기존 골프장'}</dd></div><div><dt>담당자</dt><dd>${esc(application.manager?.name||'-')} · ${esc(application.manager?.phone||'-')}</dd></div><div><dt>접수 일시</dt><dd>${esc(String(application.createdAt||'').slice(0,16).replace('T',' '))}</dd></div><div><dt>진행 상태</dt><dd><span class="badge pending">검토 대기</span></dd></div></dl><p class="hint">접수번호를 보관해주세요. 아래 ‘접수 상태 조회’에서 진행 상황을 확인할 수 있습니다.</p><div class="apply-actions"><a class="secondary" href="../index.html">사용자 앱으로</a><button class="primary" id="receipt-status" type="button">접수 상태 조회</button></div></section></div>`;
+function receiptCard(application,lookupCode){
+  return `<div class="login apply-view"><section class="login-card receipt-card"><div class="brand"><b>●</b> ALL:GOLF</div>${modeChip()}<span class="receipt-badge">접수 완료</span><h1>${esc(application.id)}</h1><p><b>${esc(application.course?.name||'')}</b> 제휴 신청이 접수되었습니다. 본사 검토 후 승인되면 사용자 앱에서 이 골프장의 시연 예약이 열립니다.</p><dl class="receipt-dl"><div><dt>골프장</dt><dd>${esc(application.course?.name||'-')} · ${esc(application.course?.region||'')} ${esc(application.course?.city||'')}</dd></div><div><dt>신청 구분</dt><dd>${application.courseMode==='new'?'신규 골프장':'기존 골프장'}</dd></div><div><dt>담당자</dt><dd>${esc(application.manager?.name||'-')} · ${esc(application.manager?.phone||'-')}</dd></div><div><dt>접수 일시</dt><dd>${esc(String(application.createdAt||'').slice(0,16).replace('T',' '))}</dd></div><div><dt>진행 상태</dt><dd><span class="badge pending">검토 대기</span></dd></div>${lookupCode?`<div><dt>조회 코드</dt><dd><b>${esc(lookupCode)}</b> · 타인은 볼 수 없습니다.</dd></div>`:''}</dl><p class="hint">${lookupCode?'접수번호와 조회 코드를 함께 보관해주세요. ‘접수 상태 조회’에서 두 값을 입력하면 진행 상황을 확인할 수 있습니다.':'접수번호를 보관해주세요. 아래 ‘접수 상태 조회’에서 진행 상황을 확인할 수 있습니다.'}</p><div class="apply-actions"><a class="secondary" href="../index.html">사용자 앱으로</a><button class="primary" id="receipt-status" type="button">접수 상태 조회</button></div></section></div>`;
 }
 /* 접수 상태 조회 ------------------------------------------------------------- */
 function statusResult(application){
@@ -234,20 +265,46 @@ function statusResult(application){
   return `<div class="status-result"><span class="badge ${esc(application.status)}">${esc(application.statusLabel||application.status)}</span><h3>${esc(application.course?.name||'-')}</h3><dl class="receipt-dl"><div><dt>접수번호</dt><dd>${esc(application.id)}</dd></div><div><dt>신청 구분</dt><dd>${application.courseMode==='new'?'신규 골프장':'기존 골프장'}</dd></div><div><dt>접수 일시</dt><dd>${esc(String(application.createdAt||'').slice(0,16).replace('T',' '))}</dd></div><div><dt>담당자</dt><dd>${esc(application.manager?.name||'-')} · ${esc(application.manager?.phone||'-')}</dd></div><div><dt>처리 일시</dt><dd>${decision.at?esc(String(decision.at).slice(0,16).replace('T',' ')):'아직 처리 전'}</dd></div>${decision.reason?`<div><dt>반려 사유</dt><dd>${esc(decision.reason)}</dd></div>`:''}</dl><p class="hint">${esc(guide)}</p>${application.status==='approved'?`<a class="primary link" href="#dashboard">골프장 관리자 화면 열기</a>`:''}</div>`;
 }
 function statusPage(){
-  const recent=partnerApi?partnerApi.list().slice(0,8):[];
-  return `<div class="login apply-view"><section class="login-card status-card"><div class="brand"><b>●</b> ALL:GOLF</div><h1>제휴 신청 상태 조회</h1><p>접수번호로 진행 상태를 확인합니다. 이 브라우저에서 접수한 신청만 조회됩니다.</p><form id="status-form"><label class="field">접수번호<input id="s-receipt" placeholder="PA-261122-0001" autocomplete="off"></label><button class="primary" type="submit">조회</button></form><div id="status-result"></div>${recent.length?`<h3 class="subhead">이 브라우저의 접수 내역</h3><div class="status-list">${recent.map(item=>`<button class="status-row" type="button" data-status="${esc(item.id)}"><b>${esc(item.id)}</b><span>${esc(item.course?.name||'')}</span><em class="badge ${esc(item.status)}">${esc(item.statusLabel||item.status)}</em></button>`).join('')}</div>`:''}<div class="apply-actions"><a class="secondary" href="#apply">새 제휴 신청</a><a class="secondary" href="../index.html">사용자 앱으로</a></div></section></div>`;
+  const server=isServerMode();
+  const recent=server?readReceipts():partnerApi.list().slice(0,8);
+  const rows=server
+    ? recent.map(item=>`<button class="status-row" type="button" data-status="${esc(item.id)}" data-code="${esc(item.code||'')}"><b>${esc(item.id)}</b><span>${esc(item.courseName||'')}</span><em class="badge ${esc(item.status||'pending')}">${{pending:'검토 대기',approved:'승인 완료',rejected:'반려'}[item.status]||'검토 대기'}</em></button>`).join('')
+    : recent.map(item=>`<button class="status-row" type="button" data-status="${esc(item.id)}"><b>${esc(item.id)}</b><span>${esc(item.course?.name||'')}</span><em class="badge ${esc(item.status)}">${esc(item.statusLabel||item.status)}</em></button>`).join('');
+  return `<div class="login apply-view"><section class="login-card status-card"><div class="brand"><b>●</b> ALL:GOLF</div>${modeChip()}<h1>제휴 신청 상태 조회</h1><p>${server?'접수번호와 접수 시 안내된 6자리 조회 코드를 입력합니다. 다른 사람의 신청은 열람할 수 없습니다.':'접수번호로 진행 상태를 확인합니다. 이 브라우저에서 접수한 신청만 조회됩니다.'}</p><form id="status-form"><label class="field">접수번호<input id="s-receipt" placeholder="PA-261124-0001" autocomplete="off"></label>${server?'<label class="field">조회 코드<input id="s-code" inputmode="numeric" maxlength="6" placeholder="6자리 숫자" autocomplete="one-time-code"></label>':''}<button class="primary" type="submit">조회</button></form><div id="status-result"></div>${rows?`<h3 class="subhead">${server?'이 브라우저에서 접수한 내역':'이 브라우저의 접수 내역'}</h3><div class="status-list">${rows}</div>`:''}<div class="apply-actions"><a class="secondary" href="#apply">새 제휴 신청</a><a class="secondary" href="../index.html">사용자 앱으로</a></div><p class="hint">${modeNote()}</p></section></div>`;
 }
 function bindStatus(){
   const resultBox=document.querySelector('#status-result');
-  const search=()=>{
-    const receipt=val('s-receipt');
+  const search=async(lookupCode)=>{
+    const receipt=val('s-receipt').trim();
+    if(!receipt){resultBox.innerHTML='<div class="form-error">접수번호를 입력해주세요.</div>';return}
+    if(isServerMode()){
+      const code=(lookupCode!==undefined?lookupCode:val('s-code')||'').trim();
+      resultBox.innerHTML='<div class="notice">서버에서 조회하는 중…</div>';
+      const response=await apiClient.request(`/api/partner-applications/${encodeURIComponent(receipt)}?code=${encodeURIComponent(code)}`,{timeoutMs:8000});
+      if(response.ok&&response.data&&response.data.application){
+        const found=response.data.application;
+        resultBox.innerHTML=statusResult(found);
+        return;
+      }
+      if(response.status===403)resultBox.innerHTML='<div class="form-error">조회 코드가 일치하지 않습니다. 접수 완료 화면에 안내된 6자리 코드를 입력해주세요.</div>';
+      else if(response.status===404)resultBox.innerHTML='<div class="form-error">해당 접수번호의 신청을 찾을 수 없습니다. 번호를 다시 확인해주세요.</div>';
+      else if(response.status===429)resultBox.innerHTML='<div class="form-error">조회 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.</div>';
+      else resultBox.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'조회하지 못했습니다. 서버 연결을 확인해주세요.')}</div>`;
+      return;
+    }
     const found=partnerApi?partnerApi.statusOf(receipt):null;
     resultBox.innerHTML=found?statusResult(found):'<div class="form-error">해당 접수번호의 신청을 찾을 수 없습니다. 접수번호를 다시 확인해주세요.</div>';
   };
   document.querySelector('#status-form').onsubmit=event=>{event.preventDefault();search()};
-  document.querySelectorAll('[data-status]').forEach(el=>el.onclick=()=>{document.querySelector('#s-receipt').value=el.dataset.status;search()});
-  const preselected=hashCourse()||lastReceipt;
-  if(preselected){document.querySelector('#s-receipt').value=preselected;search()}
+  document.querySelectorAll('[data-status]').forEach(el=>el.onclick=()=>{
+    document.querySelector('#s-receipt').value=el.dataset.status;
+    const codeField=document.querySelector('#s-code');
+    if(codeField&&el.dataset.code)codeField.value=el.dataset.code;
+    search(el.dataset.code||undefined);
+  });
+  const stored=readReceipts()[0];
+  const preselected=hashCourse()||lastReceipt||(isServerMode()&&stored?stored.id:'');
+  if(preselected){document.querySelector('#s-receipt').value=preselected;const codeField=document.querySelector('#s-code');if(codeField){codeField.value=lastLookupCode||(stored&&stored.id===preselected?stored.code:'')}search(codeField?codeField.value:undefined)}
 }
 
 function render(){
