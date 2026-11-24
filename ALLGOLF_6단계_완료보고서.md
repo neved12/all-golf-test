@@ -380,6 +380,6 @@ data/partner-application.js       서버 승인분 합치기
 partner/index.html, partner.js, partner.css    서버 접수·조회 코드·모드 표시
 admin/index.html, admin.js, admin.css          서버 로그인·승인·반려·이력
 index.html                        새 스크립트 로드
-tests/run-server-scenarios.js     6단계 테스트 89개
+tests/run-server-scenarios.js     6단계 테스트 90개
 tests/README.md                   테스트 안내
 ```
