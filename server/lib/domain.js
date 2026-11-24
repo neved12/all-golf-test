@@ -211,7 +211,6 @@ function publicCourse(record) {
     phone: record.phone || null,
     website: record.website || null,
     source: record.source || null,
-    partnerApplicationId: record.applicationId || null,
     approvedAt: record.approvedAt || null,
     greenFee: {
       weekday: record.greenFee && record.greenFee.weekday != null ? Number(record.greenFee.weekday) : null,

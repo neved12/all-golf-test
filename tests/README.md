@@ -31,7 +31,7 @@ node tests/run-scenarios.js
 node tests/run-server-scenarios.js
 ```
 
-- `server/index.js` 를 **임시 DB 파일**로 실제 기동하고 HTTP API 를 검사합니다(88개).
+- `server/index.js` 를 **임시 DB 파일**로 실제 기동하고 HTTP API 를 검사합니다(90개).
 - 서로 다른 컨텍스트 시뮬레이션
   - A(골프장): 제휴 신청 접수 → 접수번호·조회 코드 발급 → 본인 조회
   - B(본사): 관리자 로그인 → 목록 확인 → 승인 → 처리 이력 확인

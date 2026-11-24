@@ -261,7 +261,7 @@ function createApi(options) {
         });
         return application;
       });
-      broadcast('partner-courses.changed', { reason: 'application.created', applicationId: created.id, at: nowIso() });
+      broadcast('partner-courses.changed', { reason: 'application.created', at: nowIso() });
       http.sendJson(res, 201, {
         ok: true,
         application: domain.publicApplication(created),
@@ -400,8 +400,8 @@ function createApi(options) {
         });
         return application;
       });
-      broadcast('partner-courses.changed', { reason: `application.${toStatus}`, applicationId: id, at: nowIso() });
-      broadcast('application.decided', { applicationId: id, status: toStatus, at: nowIso() });
+      broadcast('partner-courses.changed', { reason: `application.${toStatus}`, at: nowIso() });
+      broadcast('application.decided', { status: toStatus, at: nowIso() });
       http.sendJson(res, 200, { ok: true, application: domain.adminApplication(updated), mode: 'server' });
       return;
     }
