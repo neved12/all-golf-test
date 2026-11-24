@@ -238,6 +238,7 @@ async function main() {
     ok('공개 목록에 담당자 이메일 없음', !publicJson.includes('stage6@example.com'));
     ok('공개 목록에 담당자 이름 없음', !publicJson.includes('김담당'));
     ok('공개 목록에 운영 메모 없음', !publicJson.includes('주말 2인 플레이 가능'));
+    ok('공개 목록에 제휴 신청 접수번호 없음', !publicJson.includes(application.id), application.id);
     const teeTimes = await call('GET', `/api/partner-courses/${approvedCourseId}/tee-times?date=${tomorrow}`);
     eq('승인 골프장 시연 티타임 200', teeTimes.status, 200);
     ok('시연 티타임 5개 생성', teeTimes.data.teeTimes.length === 5 && teeTimes.data.teeTimes.every(item => /^\d{2}:\d{2}$/.test(item.time)));
