@@ -1,8 +1,9 @@
 'use strict';
-/* ALL:GOLF API (6단계 제휴 + 7단계 골프장별 계정·운영)
-   공개: 건강 확인, 제휴 신청 접수·본인 조회, 승인 골프장 목록, 공개 카탈로그(티타임·특가)
-   본사 관리자: 로그인, 신청 승인·반려, 처리 이력, 골프장 담당자 계정 관리, 골프장별 운영 현황
-   골프장 담당자: 로그인/로그아웃, 자기 골프장의 티타임·요금·특가 CRUD (서버 세션의 courseId 로만 식별)
+/* ALL:GOLF API (8단계: 서버 예약·원자적 재고·취소/환불)
+   공개: 건강 확인, 제휴 신청, 승인 골프장, 공개 카탈로그, 임시확보(Hold)·예약 확정·조회·취소
+   본사 관리자: 로그인, 신청 승인·반려, 담당자 계정, 골프장 운영 현황, 전체 예약·취소·환불
+   골프장 담당자: 로그인/로그아웃, 자기 골프장의 티타임·요금·특가·예약 (서버 세션의 courseId 로만 식별)
+   - 예약 재고 검증·차감은 store.update(파일 잠금) 안에서 처리해 중복 예약(Overbooking)을 409 로 막는다.
    - 브라우저에서 courseId 를 바꿔도 다른 골프장 데이터에는 접근할 수 없다(서버가 403). */
 
 const crypto = require('crypto');
@@ -10,6 +11,7 @@ const path = require('path');
 const domain = require('../lib/domain');
 const operations = require('../lib/operations');
 const accounts = require('../lib/accounts');
+const reservations = require('../lib/reservations');
 const http = require('../lib/http');
 
 class HttpError extends Error {
@@ -36,6 +38,33 @@ function createApi(options) {
   function pushAudit(db, entry) {
     db.auditLogs.push({ id: auditId(), at: nowIso(), ...entry });
     if (db.auditLogs.length > 10000) db.auditLogs.splice(0, db.auditLogs.length - 10000);
+  }
+
+  /* 8단계: 예약·재고 변경을 모든 화면(SSE)에 알린다. */
+  function broadcastInventory(courseId, date, teeTimeId) {
+    broadcast('inventory.changed', { courseId: String(courseId), date, teeTimeId: String(teeTimeId || ''), at: nowIso() });
+  }
+  function broadcastReservation(event, payload) {
+    broadcast('reservations.changed', { event, ...(payload || {}), at: nowIso() });
+  }
+
+  /* 예약 번호·연락처 조회와 취소 요청의 무차별 시도 제한(IP + 예약번호). */
+  const reservationGuard = new Map();
+  function reservationLookupLimit(ip, key) {
+    const guardKey = `${ip}:${key}`;
+    const now = Date.now();
+    const record = reservationGuard.get(guardKey);
+    if (!record || now - record.firstAt > 10 * 60 * 1000) {
+      reservationGuard.set(guardKey, { count: 1, firstAt: now });
+      return { ok: true };
+    }
+    record.count += 1;
+    if (record.count > 20) return { ok: false, retryAfter: Math.ceil((record.firstAt + 10 * 60 * 1000 - now) / 1000) };
+    return { ok: true };
+  }
+
+  function reservationStatsFor(db, options) {
+    return reservations.statsFor(db, options || {});
   }
 
   function courseNameOf(db, courseId) {
@@ -179,7 +208,7 @@ function createApi(options) {
     const query = url.searchParams;
 
     if (pathname === '/api/health' && method === 'GET') {
-      let db = { applications: [], approvedCourses: [], auditLogs: [], partnerAccounts: [], teeTimes: [], specialOffers: [], meta: { revision: 0 } };
+      let db = { applications: [], approvedCourses: [], auditLogs: [], partnerAccounts: [], teeTimes: [], specialOffers: [], reservations: [], bookingHolds: [], meta: { revision: 0 } };
       try { db = store.read(); } catch (error) {
         http.sendError(res, 500, error.code || 'db_error', error.message);
         return;
@@ -188,12 +217,14 @@ function createApi(options) {
         ok: true,
         name: config.serverName,
         version: config.version,
-        stage: 7,
+        stage: 8,
+        stages: [1, 2, 3, 4, 5, 6, 7, 8],
         time: nowIso(),
         uptimeSec: Math.round(process.uptime()),
         auth: { configured: !config.usingDefaultPassword, mode: config.usingDefaultPassword ? 'demo-default-password' : 'env', partnerAccounts: true },
         db: {
           persistent: true,
+          schemaVersion: db.version || 3,
           file: (() => {
             const relative = path.relative(config.rootDir, config.dbPath);
             return relative.startsWith('..') ? config.dbPath : relative;
@@ -204,6 +235,9 @@ function createApi(options) {
           partnerAccounts: (db.partnerAccounts || []).length,
           teeTimes: (db.teeTimes || []).length,
           specialOffers: (db.specialOffers || []).filter(item => !item.deletedAt).length,
+          reservations: (db.reservations || []).length,
+          confirmedReservations: (db.reservations || []).filter(item => item.status === 'confirmed').length,
+          activeHolds: (db.bookingHolds || []).filter(item => item.status === 'active').length,
           auditLogs: db.auditLogs.length,
           revision: db.meta.revision || 0,
           updatedAt: db.meta.updatedAt || null
@@ -217,8 +251,14 @@ function createApi(options) {
           teeTimes: true,
           rates: true,
           specialOffers: true,
-          publicCatalog: true
+          publicCatalog: true,
+          reservations: true,
+          holds: true,
+          inventoryLinked: true,
+          idempotency: true,
+          refunds: true
         },
+        hold: { ttlSec: Math.round(config.holdTtlMs / 1000), maxPerSession: config.maxHoldsPerSession },
         dataMode: 'demo'
       });
       return;
@@ -262,13 +302,14 @@ function createApi(options) {
       if (serverTimes.length) {
         const rates = operations.effectiveRates(db, courseId);
         const offers = (db.specialOffers || []).filter(item => String(item.courseId) === courseId && item.roundDate === date && !item.deletedAt);
+        const counts = operations.inventoryFor(db);
         const teeTimes = serverTimes
           .slice()
           .sort((a, b) => String(a.time).localeCompare(String(b.time)))
-          .map(item => operations.publicTeeTime(db, item, rates, offers));
+          .map(item => operations.publicTeeTime(db, item, rates, offers, counts));
         http.sendJson(res, 200, {
           ok: true, mode: 'server', source: 'server', courseId, date, count: teeTimes.length, teeTimes,
-          inventoryLinked: false, dataMode: 'demo'
+          inventoryLinked: true, dataMode: 'demo'
         });
         return;
       }
@@ -284,6 +325,248 @@ function createApi(options) {
       const record = db.approvedCourses.find(course => String(course.id) === courseId);
       if (!record) throw new HttpError(404, 'course_not_found', '승인된 제휴 골프장을 찾을 수 없습니다.');
       http.sendJson(res, 200, { ok: true, mode: 'server', course: domain.publicCourse(record), dataMode: 'demo' });
+      return;
+    }
+
+    /* --- 8단계: 공개 재고 · 임시확보(Hold) · 예약 -------------------------- */
+
+    /* 날짜별 티타임 잔여 팀(서버 예약·Hold 기준). 다른 기기와 공유되는 실시간 재고. */
+    if (pathname === '/api/public/inventory' && method === 'GET') {
+      const date = String(query.get('date') || operations.todayKst());
+      if (!domain.isValidDate(date)) throw new HttpError(400, 'invalid_date', 'date 는 YYYY-MM-DD 형식이어야 합니다.');
+      const courseId = String(query.get('courseId') || '').trim();
+      const db = store.read();
+      const counts = operations.inventoryFor(db);
+      const courses = [...new Set((db.teeTimes || [])
+        .filter(item => item.date === date && (!courseId || String(item.courseId) === courseId))
+        .map(item => String(item.courseId)))]
+        .map(id => {
+          const rates = operations.effectiveRates(db, id);
+          const offers = (db.specialOffers || []).filter(offer => String(offer.courseId) === id && offer.roundDate === date && !offer.deletedAt);
+          const teeTimes = (db.teeTimes || [])
+            .filter(item => String(item.courseId) === id && item.date === date)
+            .sort((a, b) => String(a.time).localeCompare(String(b.time)))
+            .map(item => operations.publicTeeTime(db, item, rates, offers, counts));
+          return { courseId: id, courseName: (db.approvedCourses.find(course => String(course.id) === id) || {}).name || null, teeTimes };
+        });
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        date,
+        inventoryLinked: true,
+        activeHolds: (db.bookingHolds || []).filter(hold => hold.status === 'active').length,
+        courses,
+        serverTime: nowIso()
+      });
+      return;
+    }
+
+    /* 임시확보(Hold): 5분간 1팀을 잡아 둔다. 만료되면 자동으로 잔여 팀이 복구된다. */
+    if (pathname === '/api/public/holds' && method === 'POST') {
+      const body = await http.readJson(req);
+      const ip = http.clientIp(req);
+      const sessionId = String(body.sessionId || req.headers['x-booking-session'] || '').slice(0, 120);
+      const { result } = await store.update(db => {
+        const outcome = reservations.createHold(db, { ...body, sessionId }, {
+          ttlMs: config.holdTtlMs,
+          maxHoldsPerSession: config.maxHoldsPerSession,
+          ip
+        });
+        if (!outcome.ok) {
+          throw new HttpError(outcome.code === 'sold_out' ? 409 : 400, outcome.code, outcome.message);
+        }
+        const counts = operations.inventoryFor(db);
+        return {
+          reused: outcome.reused,
+          hold: outcome.hold,
+          tee: operations.teeTimeForPartner(outcome.tee, operations.effectiveRates(db, outcome.tee.courseId), counts)
+        };
+      });
+      if (!result.reused) broadcastInventory(result.hold.courseId, result.hold.date, result.hold.teeTimeId);
+      http.sendJson(res, result.reused ? 200 : 201, {
+        ok: true,
+        mode: 'server',
+        reused: result.reused,
+        hold: reservations.holdView(result.hold),
+        tee: result.tee,
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    const publicHoldMatch = pathname.match(/^\/api\/public\/holds\/([^/]+)$/);
+    if (publicHoldMatch && (method === 'DELETE' || method === 'POST')) {
+      const holdId = decodeURIComponent(publicHoldMatch[1]);
+      const body = method === 'POST' ? await http.readJson(req).catch(() => ({})) : {};
+      const sessionId = String(body.sessionId || query.get('sessionId') || req.headers['x-booking-session'] || '');
+      const { result } = await store.update(db => {
+        const outcome = reservations.releaseHold(db, holdId, sessionId);
+        if (!outcome.ok) throw new HttpError(outcome.code === 'forbidden_hold' ? 403 : 404, outcome.code, outcome.message);
+        return outcome.hold;
+      });
+      broadcastInventory(result.courseId, result.date, result.teeTimeId);
+      http.sendJson(res, 200, { ok: true, mode: 'server', released: result.id, inventoryLinked: true });
+      return;
+    }
+
+    /* 예약 확정: Hold 또는 즉석 예약. 재고 검증·차감은 Lock 안에서 원자적으로 처리. */
+    if (pathname === '/api/public/reservations' && method === 'POST') {
+      const body = await http.readJson(req);
+      const ip = http.clientIp(req);
+      const headerKey = req.headers['idempotency-key'];
+      const idempotencyHash = reservations.hashIdempotencyKey(headerKey || body.idempotencyKey);
+      const sessionId = String(body.sessionId || req.headers['x-booking-session'] || '').slice(0, 120);
+      const { result } = await store.update(db => {
+        reservations.sweepExpiredHolds(db);
+        if (idempotencyHash) {
+          const existing = reservations.findByIdempotency(db, idempotencyHash, sessionId);
+          if (existing) return { idempotent: true, reservation: existing };
+        }
+        const outcome = reservations.createReservation(db, body, {
+          sessionId,
+          holdId: body.holdId || null,
+          idempotencyHash,
+          ip
+        });
+        if (!outcome.ok) {
+          throw new HttpError(outcome.status || 400, outcome.code, outcome.message, outcome.errors ? { errors: outcome.errors } : undefined);
+        }
+        const reservation = outcome.reservation;
+        pushAudit(db, {
+          action: 'reservation.created',
+          courseId: reservation.courseId,
+          courseName: reservation.courseName,
+          reservationNumber: reservation.number,
+          teeTimeId: reservation.teeTimeId,
+          date: reservation.date,
+          time: reservation.time,
+          actor: { type: 'customer', email: null, ip },
+          memo: `${reservation.number} · ${reservation.people}명 · 예약금 ${reservation.paidDeposit}원`
+        });
+        return { idempotent: false, reservation };
+      });
+      const reservation = result.reservation;
+      const fresh = store.read();
+      const tee = operations.findTeeTime(fresh, reservation.teeTimeId);
+      const counts = operations.inventoryFor(fresh);
+      if (!result.idempotent) {
+        broadcastReservation('created', { number: reservation.number, courseId: reservation.courseId, date: reservation.date });
+        broadcastInventory(reservation.courseId, reservation.date, reservation.teeTimeId);
+      }
+      http.sendJson(res, result.idempotent ? 200 : 201, {
+        ok: true,
+        mode: 'server',
+        idempotent: result.idempotent,
+        reservation: reservations.publicReservation(reservation, { verified: true }),
+        inventory: tee ? { teeTimeId: tee.id, remaining: operations.remainingTeams(tee, counts), capacityTeams: tee.capacityTeams } : null,
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    /* 같은 연락처의 서버 예약 목록(여러 기기에서 동일하게 조회). */
+    if (pathname === '/api/public/reservations' && method === 'GET') {
+      const ip = http.clientIp(req);
+      const phone = reservations.digits(query.get('phone'));
+      if (phone.length < 10) throw new HttpError(400, 'phone_required', '예약자 휴대전화번호를 입력해주세요.');
+      const guard = reservationLookupLimit(ip, `list:${phone}`);
+      if (!guard.ok) throw new HttpError(429, 'rate_limited', `조회 시도가 너무 많습니다. ${guard.retryAfter}초 후 다시 시도해주세요.`, { retryAfter: guard.retryAfter });
+      const db = store.read();
+      const items = (db.reservations || [])
+        .filter(item => reservations.ownsReservation(item, phone))
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .slice(0, 50);
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        count: items.length,
+        reservations: items.map(item => reservations.publicReservation(item, { verified: true })),
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    /* 고객 예약 취소: 본인 연락처 확인 후 상태 전이·환불 계산·재고 복구 */
+    const publicCancelMatch = pathname.match(/^\/api\/public\/reservations\/([^/]+)\/cancel$/);
+    if (publicCancelMatch && method === 'POST') {
+      const reference = decodeURIComponent(publicCancelMatch[1]);
+      const body = await http.readJson(req);
+      const ip = http.clientIp(req);
+      const guard = reservationLookupLimit(ip, `cancel:${reference}`);
+      if (!guard.ok) throw new HttpError(429, 'rate_limited', `요청이 너무 많습니다. ${guard.retryAfter}초 후 다시 시도해주세요.`, { retryAfter: guard.retryAfter });
+      const phone = reservations.digits(body.phone || query.get('phone'));
+      const reason = domain.text(body.reason).slice(0, 200) || '사용자 취소';
+      const { result } = await store.update(db => {
+        reservations.sweepExpiredHolds(db);
+        const reservation = reservations.findReservation(db, reference);
+        if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다. 예약번호를 확인해주세요.');
+        if (!reservations.ownsReservation(reservation, phone)) {
+          throw new HttpError(403, 'lookup_failed', '예약자 연락처가 일치하지 않습니다.');
+        }
+        const outcome = reservations.cancelReservation(db, reservation, {
+          by: { type: 'customer', email: null, ip },
+          reason
+        });
+        if (!outcome.ok) {
+          throw new HttpError(outcome.status || 409, outcome.code, outcome.message, outcome.refund ? { refund: outcome.refund } : undefined);
+        }
+        if (!outcome.alreadyCancelled) {
+          pushAudit(db, {
+            action: 'reservation.cancelled',
+            courseId: reservation.courseId,
+            courseName: reservation.courseName,
+            reservationNumber: reservation.number,
+            teeTimeId: reservation.teeTimeId,
+            date: reservation.date,
+            time: reservation.time,
+            actor: { type: 'customer', email: null, ip },
+            memo: `${reservation.number} · ${outcome.refund.refundRate}% 환불(수수료 ${outcome.refund.cancellationFee}원)`
+          });
+        }
+        return outcome;
+      });
+      if (!result.alreadyCancelled) {
+        broadcastReservation('cancelled', { number: result.reservation.number, courseId: result.reservation.courseId, date: result.reservation.date });
+        broadcastInventory(result.reservation.courseId, result.reservation.date, result.reservation.teeTimeId);
+      }
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        alreadyCancelled: Boolean(result.alreadyCancelled),
+        reservation: reservations.publicReservation(result.reservation, { verified: true }),
+        refund: result.refund || null,
+        inventoryLinked: true
+      });
+      return;
+    }
+
+    /* 고객 예약 상세: 예약번호 + 연락처 */
+    const publicReservationMatch = pathname.match(/^\/api\/public\/reservations\/([^/]+)$/);
+    if (publicReservationMatch && method === 'GET') {
+      const reference = decodeURIComponent(publicReservationMatch[1]);
+      const ip = http.clientIp(req);
+      const guard = reservationLookupLimit(ip, `view:${reference}`);
+      if (!guard.ok) throw new HttpError(429, 'rate_limited', `조회 시도가 너무 많습니다. ${guard.retryAfter}초 후 다시 시도해주세요.`, { retryAfter: guard.retryAfter });
+      const phone = reservations.digits(query.get('phone'));
+      if (phone.length < 10) throw new HttpError(400, 'phone_required', '예약자 휴대전화번호를 입력해주세요.');
+      const db = store.read();
+      const reservation = reservations.findReservation(db, reference);
+      if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다. 예약번호를 확인해주세요.');
+      if (!reservations.ownsReservation(reservation, phone)) {
+        throw new HttpError(403, 'lookup_failed', '예약자 연락처가 일치하지 않습니다.');
+      }
+      const quote = reservations.cancellationQuote(reservation, operations.effectiveRates(db, reservation.courseId).cancellationPolicy);
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        reservation: reservations.publicReservation(reservation, { verified: true }),
+        cancellationQuote: quote,
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
       return;
     }
 
@@ -689,6 +972,8 @@ function createApi(options) {
         const offerStates = offers.map(item => operations.offerStatus(item, new Date(), operations.soldTeamsFor(db, item.id)));
         const rate = (db.rates || {})[courseId] || null;
         const courseAccounts = (db.partnerAccounts || []).filter(item => String(item.courseId) === courseId);
+        const courseReservations = (db.reservations || []).filter(item => String(item.courseId) === courseId);
+        const dayReservations = courseReservations.filter(item => item.date === date && item.status === 'confirmed');
         const recent = (db.auditLogs || [])
           .filter(item => String(item.courseId) === courseId && item.action !== 'application.created')
           .sort((a, b) => String(b.at).localeCompare(String(a.at)))
@@ -714,6 +999,13 @@ function createApi(options) {
           },
           rates: rate ? { baseGreenFee: rate.baseGreenFee, version: rate.version, updatedAt: rate.updatedAt } : null,
           accounts: { total: courseAccounts.length, active: courseAccounts.filter(item => item.status === 'active').length },
+          reservations: {
+            total: courseReservations.length,
+            date: dayReservations.length,
+            peopleOnDate: dayReservations.reduce((sum, item) => sum + Number(item.people || 0), 0),
+            cancelled: courseReservations.filter(item => item.status === 'cancelled').length,
+            refundAmount: courseReservations.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0)
+          },
           lastUpdated: stamps.length ? stamps[stamps.length - 1] : null,
           recent
         };
@@ -729,7 +1021,10 @@ function createApi(options) {
           teeTimesOnDate: (db.teeTimes || []).filter(item => item.date === date).length,
           offers: (db.specialOffers || []).filter(item => !item.deletedAt).length,
           accounts: (db.partnerAccounts || []).length,
-          activeAccounts: (db.partnerAccounts || []).filter(item => item.status === 'active').length
+          activeAccounts: (db.partnerAccounts || []).filter(item => item.status === 'active').length,
+          reservations: (db.reservations || []).length,
+          reservationsOnDate: (db.reservations || []).filter(item => item.date === date && item.status === 'confirmed').length,
+          activeHolds: (db.bookingHolds || []).filter(item => item.status === 'active').length
         },
         courses,
         dataMode: 'demo'
@@ -744,13 +1039,14 @@ function createApi(options) {
       const date = String(query.get('date') || '');
       if (date && !domain.isValidDate(date)) throw new HttpError(400, 'invalid_date', 'date 는 YYYY-MM-DD 형식이어야 합니다.');
       const ratesCache = new Map();
+      const counts = operations.inventoryFor(db);
       const items = (db.teeTimes || [])
         .filter(item => (!courseId || String(item.courseId) === courseId) && (!date || item.date === date))
         .sort((a, b) => `${a.date} ${a.courseId} ${a.time}`.localeCompare(`${b.date} ${b.courseId} ${b.time}`))
         .map(item => {
           if (!ratesCache.has(String(item.courseId))) ratesCache.set(String(item.courseId), operations.effectiveRates(db, item.courseId));
           return {
-            ...operations.teeTimeForPartner(item, ratesCache.get(String(item.courseId))),
+            ...operations.teeTimeForPartner(item, ratesCache.get(String(item.courseId)), counts),
             courseName: courseNameOf(db, item.courseId)
           };
         });
@@ -800,10 +1096,120 @@ function createApi(options) {
           partnerAccounts: (db.partnerAccounts || []).length,
           teeTimes: (db.teeTimes || []).length,
           specialOffers: (db.specialOffers || []).filter(item => !item.deletedAt).length,
+          reservations: (db.reservations || []).length,
+          confirmedReservations: (db.reservations || []).filter(item => item.status === 'confirmed').length,
+          cancelledReservations: (db.reservations || []).filter(item => item.status === 'cancelled').length,
+          activeHolds: (db.bookingHolds || []).filter(item => item.status === 'active').length,
+          reservationStats: reservationStatsFor(db, {}),
           auditLogs: db.auditLogs.length,
           lastUpdated: db.meta.updatedAt
         },
         mode: 'server'
+      });
+      return;
+    }
+
+    /* --- 8단계: 본사 관리자의 전체 예약·취소·환불 -------------------------- */
+    if (pathname === '/api/admin/reservations' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const courseId = String(query.get('courseId') || '');
+      const date = String(query.get('date') || '');
+      const from = String(query.get('from') || '');
+      const to = String(query.get('to') || '');
+      const status = String(query.get('status') || '');
+      const q = String(query.get('q') || '').trim().toLowerCase();
+      [date, from, to].filter(Boolean).forEach(value => {
+        if (!domain.isValidDate(value)) throw new HttpError(400, 'invalid_date', '날짜는 YYYY-MM-DD 형식이어야 합니다.');
+      });
+      let items = (db.reservations || []).slice();
+      if (courseId) items = items.filter(item => String(item.courseId) === courseId);
+      if (date) items = items.filter(item => item.date === date);
+      if (from) items = items.filter(item => item.date >= from);
+      if (to) items = items.filter(item => item.date <= to);
+      if (reservations.RESERVATION_STATUSES.includes(status)) items = items.filter(item => item.status === status);
+      if (q) items = items.filter(item => `${item.number} ${item.booker} ${item.phone} ${item.courseName || ''} ${item.time}`.toLowerCase().includes(q));
+      items = items.slice().sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        count: items.length,
+        stats: reservationStatsFor(db, { courseId: courseId || null }),
+        activeHolds: (db.bookingHolds || []).filter(hold => hold.status === 'active').length,
+        reservations: items.map(item => reservations.partnerReservation(db, item)),
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    const adminReservationMatch = pathname.match(/^\/api\/admin\/reservations\/([^/]+)$/);
+    if (adminReservationMatch && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const reservation = reservations.findReservation(db, decodeURIComponent(adminReservationMatch[1]));
+      if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다.');
+      http.sendJson(res, 200, { ok: true, mode: 'server', reservation: reservations.partnerReservation(db, reservation), dataMode: 'demo' });
+      return;
+    }
+
+    const adminReservationStatusMatch = pathname.match(/^\/api\/admin\/reservations\/([^/]+)\/status$/);
+    if (adminReservationStatusMatch && method === 'POST') {
+      const admin = requireAdmin(req);
+      const id = decodeURIComponent(adminReservationStatusMatch[1]);
+      const body = await http.readJson(req);
+      const nextStatus = String(body.status || '');
+      const reason = domain.text(body.reason).slice(0, 200);
+      if (!['confirmed', 'completed', 'no_show', 'cancelled'].includes(nextStatus)) {
+        throw new HttpError(400, 'invalid_status', '변경할 수 없는 예약 상태입니다.');
+      }
+      if (nextStatus === 'cancelled' && !reason) {
+        throw new HttpError(400, 'reason_required', '취소 사유를 입력해주세요.');
+      }
+      const { result } = await store.update(db => {
+        const reservation = reservations.findReservation(db, id);
+        if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다.');
+        if (body.version != null && Number(body.version) !== Number(reservation.version)) {
+          throw new HttpError(409, 'version_conflict', '다른 곳에서 먼저 변경했습니다. 새로고침 후 다시 시도해주세요.', {
+            current: reservations.partnerReservation(db, reservation)
+          });
+        }
+        const actor = adminActor(req, admin.payload);
+        let outcome;
+        if (nextStatus === 'cancelled') {
+          outcome = reservations.cancelReservation(db, reservation, { by: actor, reason, force: true });
+        } else {
+          outcome = reservations.updateReservationStatus(db, reservation, nextStatus, { by: actor, reason });
+        }
+        if (!outcome.ok) {
+          throw new HttpError(outcome.status || 409, outcome.code, outcome.message, outcome.refund ? { refund: outcome.refund } : undefined);
+        }
+        if (outcome.changed !== false && !outcome.alreadyCancelled) {
+          pushAudit(db, {
+            action: nextStatus === 'cancelled' ? 'reservation.cancelled' : 'reservation.status-updated',
+            courseId: reservation.courseId,
+            courseName: reservation.courseName,
+            reservationNumber: reservation.number,
+            teeTimeId: reservation.teeTimeId,
+            date: reservation.date,
+            time: reservation.time,
+            actor,
+            memo: `${reservation.number} · ${reservations.statusLabel(nextStatus)} · ${reason || '관리자 처리'}`
+          });
+        }
+        return outcome;
+      });
+      broadcastReservation('admin-updated', { number: result.reservation.number, courseId: result.reservation.courseId, date: result.reservation.date });
+      broadcastInventory(result.reservation.courseId, result.reservation.date, result.reservation.teeTimeId);
+      const db = store.read();
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        changed: result.changed !== false && !result.alreadyCancelled,
+        reservation: reservations.partnerReservation(db, reservations.findReservation(db, id)),
+        refund: result.refund || null,
+        inventoryLinked: true,
+        dataMode: 'demo'
       });
       return;
     }
@@ -918,11 +1324,23 @@ function createApi(options) {
           scheduled: offers.filter(item => operations.offerStatus(item, new Date(), operations.soldTeamsFor(db, item.id)) === 'scheduled').length
         },
         accounts: { total: accountCount.length, active: accountCount.filter(item => item.status === 'active').length },
-        reservations: {
-          source: 'demo-local',
-          linked: false,
-          count: null,
-          note: '예약은 아직 서버로 이전되지 않았습니다(8단계). 예약 관리 화면은 이 브라우저의 시연 예약만 표시합니다.'
+        reservations: (() => {
+          const items = (db.reservations || []).filter(item => String(item.courseId) === courseId);
+          const todayItems = items.filter(item => item.date === today && item.status === 'confirmed');
+          return {
+            source: 'server',
+            linked: true,
+            count: items.length,
+            today: todayItems.length,
+            upcoming: items.filter(item => item.date >= today && item.status === 'confirmed').length,
+            cancelled: items.filter(item => item.status === 'cancelled').length,
+            refundAmount: items.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0),
+            note: '서버 예약입니다. 잔여 팀은 확정 예약과 진행 중 임시확보를 함께 계산합니다(시연용).'
+          };
+        })(),
+        inventory: {
+          linked: true,
+          activeHolds: (db.bookingHolds || []).filter(hold => String(hold.courseId) === courseId && hold.status === 'active').length
         },
         lastUpdated: stamps.length ? stamps[stamps.length - 1] : null,
         serverTime: nowIso(),
@@ -942,16 +1360,17 @@ function createApi(options) {
       if (from && !domain.isValidDate(from)) throw new HttpError(400, 'invalid_date', 'from 은 YYYY-MM-DD 형식이어야 합니다.');
       if (to && !domain.isValidDate(to)) throw new HttpError(400, 'invalid_date', 'to 는 YYYY-MM-DD 형식이어야 합니다.');
       const rates = operations.effectiveRates(session.db, courseId);
+      const counts = operations.inventoryFor(session.db);
       const items = (session.db.teeTimes || [])
         .filter(item => String(item.courseId) === courseId
           && (!date || item.date === date)
           && (!from || item.date >= from)
           && (!to || item.date <= to))
         .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
-        .map(item => operations.teeTimeForPartner(item, rates));
+        .map(item => operations.teeTimeForPartner(item, rates, counts));
       http.sendJson(res, 200, {
         ok: true, mode: 'server', courseId, date: date || null, count: items.length, teeTimes: items,
-        inventoryLinked: false, updatedAt: session.db.meta.updatedAt, dataMode: 'demo'
+        inventoryLinked: true, updatedAt: session.db.meta.updatedAt, dataMode: 'demo'
       });
       return;
     }
@@ -1000,7 +1419,7 @@ function createApi(options) {
       const db = store.read();
       http.sendJson(res, 201, {
         ok: true, mode: 'server',
-        teeTime: operations.teeTimeForPartner(result, operations.effectiveRates(db, result.courseId)),
+        teeTime: operations.teeTimeForPartner(result, operations.effectiveRates(db, result.courseId), operations.inventoryFor(db)),
         dataMode: 'demo'
       });
       return;
@@ -1080,7 +1499,7 @@ function createApi(options) {
         created: result.created.length,
         skipped: result.skipped.length,
         skippedDates: result.skipped,
-        teeTimes: result.created.map(item => operations.teeTimeForPartner(item, rates)),
+        teeTimes: result.created.map(item => operations.teeTimeForPartner(item, rates, operations.inventoryFor(db))),
         dataMode: 'demo'
       });
       return;
@@ -1100,7 +1519,7 @@ function createApi(options) {
         if (body.version == null) throw new HttpError(400, 'version_required', '수정 충돌 방지를 위해 version 값이 필요합니다.');
         if (Number(body.version) !== Number(tee.version)) {
           throw new HttpError(409, 'version_conflict', '다른 곳에서 먼저 수정했습니다. 최신 내용을 확인한 뒤 다시 저장해주세요.', {
-            current: operations.teeTimeForPartner(tee, operations.effectiveRates(db, tee.courseId))
+            current: operations.teeTimeForPartner(tee, operations.effectiveRates(db, tee.courseId), operations.inventoryFor(db))
           });
         }
         const checked = operations.validateTeeTime(body, { partial: true, existing: tee });
@@ -1127,7 +1546,7 @@ function createApi(options) {
       const db = store.read();
       http.sendJson(res, 200, {
         ok: true, mode: 'server',
-        teeTime: operations.teeTimeForPartner(result, operations.effectiveRates(db, result.courseId)),
+        teeTime: operations.teeTimeForPartner(result, operations.effectiveRates(db, result.courseId), operations.inventoryFor(db)),
         dataMode: 'demo'
       });
       return;
@@ -1377,10 +1796,123 @@ function createApi(options) {
       return;
     }
 
+    /* --- 8단계: 골프장 담당자의 서버 예약 조회·상태 처리 -------------------- */
+    if (pathname === '/api/partner/reservations' && method === 'GET') {
+      const session = partnerSession(req);
+      assertOwnCourse(query.get('courseId'), session.account);
+      const courseId = String(session.account.courseId);
+      const date = String(query.get('date') || '');
+      const from = String(query.get('from') || '');
+      const to = String(query.get('to') || '');
+      const status = String(query.get('status') || '');
+      const q = String(query.get('q') || '').trim().toLowerCase();
+      [date, from, to].filter(Boolean).forEach(value => {
+        if (!domain.isValidDate(value)) throw new HttpError(400, 'invalid_date', '날짜는 YYYY-MM-DD 형식이어야 합니다.');
+      });
+      const db = session.db;
+      let items = (db.reservations || []).filter(item => String(item.courseId) === courseId);
+      if (date) items = items.filter(item => item.date === date);
+      if (from) items = items.filter(item => item.date >= from);
+      if (to) items = items.filter(item => item.date <= to);
+      if (reservations.RESERVATION_STATUSES.includes(status)) items = items.filter(item => item.status === status);
+      if (q) items = items.filter(item => `${item.number} ${item.booker} ${item.phone} ${item.time} ${item.courseName || ''}`.toLowerCase().includes(q));
+      items = items.slice().sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        courseId,
+        count: items.length,
+        stats: reservationStatsFor(db, { date: date || null, courseId }),
+        reservations: items.map(item => reservations.partnerReservation(db, item)),
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    const partnerReservationMatch = pathname.match(/^\/api\/partner\/reservations\/([^/]+)$/);
+    if (partnerReservationMatch && method === 'GET') {
+      const session = partnerSession(req);
+      const id = decodeURIComponent(partnerReservationMatch[1]);
+      const reservation = reservations.findReservation(session.db, id);
+      if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다.');
+      if (String(reservation.courseId) !== String(session.account.courseId)) {
+        throw new HttpError(403, 'forbidden_course', '다른 골프장의 예약은 조회할 수 없습니다.');
+      }
+      http.sendJson(res, 200, { ok: true, mode: 'server', reservation: reservations.partnerReservation(session.db, reservation), dataMode: 'demo' });
+      return;
+    }
+
+    const partnerReservationStatusMatch = pathname.match(/^\/api\/partner\/reservations\/([^/]+)\/status$/);
+    if (partnerReservationStatusMatch && method === 'POST') {
+      const id = decodeURIComponent(partnerReservationStatusMatch[1]);
+      const body = await http.readJson(req);
+      const nextStatus = String(body.status || '');
+      const reason = domain.text(body.reason).slice(0, 200);
+      const { result } = await store.update(db => {
+        const session = partnerSession(req, { db, write: true });
+        const reservation = reservations.findReservation(db, id);
+        if (!reservation) throw new HttpError(404, 'reservation_not_found', '예약을 찾을 수 없습니다.');
+        if (String(reservation.courseId) !== String(session.account.courseId)) {
+          throw new HttpError(403, 'forbidden_course', '다른 골프장의 예약은 변경할 수 없습니다.');
+        }
+        if (body.version != null && Number(body.version) !== Number(reservation.version)) {
+          throw new HttpError(409, 'version_conflict', '다른 곳에서 먼저 변경했습니다. 새로고침 후 다시 시도해주세요.', {
+            current: reservations.partnerReservation(db, reservation)
+          });
+        }
+        if (!['confirmed', 'completed', 'no_show', 'cancelled'].includes(nextStatus)) {
+          throw new HttpError(400, 'invalid_status', '변경할 수 없는 예약 상태입니다.');
+        }
+        const actor = partnerActor(req, session);
+        let outcome;
+        if (nextStatus === 'cancelled') {
+          /* 골프장이 취소하는 경우 고객 취소 기한 제한을 강제 적용하지 않는다(사유·환불 계산은 기록). */
+          outcome = reservations.cancelReservation(db, reservation, {
+            by: actor,
+            reason: reason || '골프장 취소',
+            force: true
+          });
+        } else {
+          outcome = reservations.updateReservationStatus(db, reservation, nextStatus, { by: actor, reason });
+        }
+        if (!outcome.ok) {
+          throw new HttpError(outcome.status || 409, outcome.code, outcome.message, outcome.refund ? { refund: outcome.refund } : undefined);
+        }
+        if (outcome.changed !== false && !outcome.alreadyCancelled) {
+          pushAudit(db, {
+            action: nextStatus === 'cancelled' ? 'reservation.cancelled' : 'reservation.status-updated',
+            courseId: reservation.courseId,
+            courseName: reservation.courseName,
+            reservationNumber: reservation.number,
+            teeTimeId: reservation.teeTimeId,
+            date: reservation.date,
+            time: reservation.time,
+            actor,
+            memo: `${reservation.number} · ${reservations.statusLabel(nextStatus)}${reason ? ` · ${reason}` : ''}`
+          });
+        }
+        return outcome;
+      });
+      broadcastReservation('partner-updated', { number: result.reservation.number, courseId: result.reservation.courseId, date: result.reservation.date });
+      broadcastInventory(result.reservation.courseId, result.reservation.date, result.reservation.teeTimeId);
+      const db = store.read();
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        changed: result.changed !== false && !result.alreadyCancelled,
+        reservation: reservations.partnerReservation(db, reservations.findReservation(db, id)),
+        refund: result.refund || null,
+        inventoryLinked: true,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
     if (pathname === '/api/events' && method === 'GET') {
       const client = http.openSse(res);
       sseClients.add(client);
-      client.send('hello', { at: nowIso(), mode: 'server', stage: 7 });
+      client.send('hello', { at: nowIso(), mode: 'server', stage: 8 });
       const ping = setInterval(() => client.ping(), 15000);
       if (ping.unref) ping.unref();
       req.on('close', () => {

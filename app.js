@@ -10,6 +10,8 @@
 const partnerStore = window.ALL_GOLF_PARTNER_STORE || null;
 /* 7단계: 골프장 담당자가 서버에 등록한 티타임·요금·특가(읽기 전용 정보) */
 const serverCatalog = window.ALL_GOLF_SERVER_CATALOG || null;
+/* 8단계: 서버 예약·재고 연동 (서버 모드 + 8단계 서버일 때만 동작, 정적 호스팅은 요청 0건) */
+const serverReservations = window.ALL_GOLF_SERVER_RESERVATIONS || null;
 /* 제휴 승인 골프장(기본 68곳 + 승인된 신청)만 시연 예약 가능으로 노출한다.
    비제휴 골프장은 정보 조회 전용이며, 관리자 승인 즉시 예약 가능 상태로 전환된다. */
 const buildCourseList = () => {
@@ -158,11 +160,15 @@ const demoTimesForDate = (item, iso) => {
   if (item?.partnerDemo && partnerStore?.demoTimesFor) return partnerStore.demoTimesFor(item.id, iso);
   return window.ALL_GOLF_DEMO_FOR_DATE ? window.ALL_GOLF_DEMO_FOR_DATE(item.id, iso) : item.times;
 };
-/* 서버(골프장 담당자)가 등록한 티타임을 우선 사용한다. 이 브라우저의 시연 예약 수만큼만 잔여를 줄여
-   보여 주며, 서버 재고와 실제로 공유되지는 않는다(8단계 범위). */
+/* 서버(골프장 담당자)가 등록한 티타임을 우선 사용한다. 서버 예약·재고 연동(8단계)이 되면
+   잔여 팀은 서버가 계산한 값을 그대로 쓰고, 연동 전 모드에서는 이 브라우저의 시연 예약 수만큼만 줄여 보여 준다. */
+const inventoryLinked = () => Boolean(
+  (serverReservations && typeof serverReservations.linked === 'function' && serverReservations.linked())
+  || (serverCatalog && typeof serverCatalog.inventoryLinked === 'function' && serverCatalog.inventoryLinked())
+);
 const serverTimesFor = (item, iso) => (serverCatalog && serverCatalog.teeTimesFor ? serverCatalog.teeTimesFor(item.id, iso) : null);
 const localTakenTeams = (courseId, iso, time) => (getReservations() || [])
-  .filter(entry => entry.courseId === courseId && entry.dateISO === iso && entry.time === time && entry.status !== 'cancelled')
+  .filter(entry => entry.courseId === courseId && entry.dateISO === iso && entry.time === time && entry.status !== 'cancelled' && entry.source !== 'server')
   .length;
 const withLocalDemoStock = (item, iso, list) => list.map(entry => {
   const taken = localTakenTeams(item.id, iso, entry.time);
@@ -172,7 +178,11 @@ const withLocalDemoStock = (item, iso, list) => list.map(entry => {
 const rawTimesFor = (item, iso = calendarDate) => {
   if (!item?.demo) return [];
   const serverTimes = serverTimesFor(item, iso);
-  if (Array.isArray(serverTimes)) return withLocalDemoStock(item, iso, serverTimes);
+  if (Array.isArray(serverTimes)) {
+    /* 8단계 연동 시 서버 잔여 팀이 진실이다(다른 기기·브라우저와 공유). */
+    if (inventoryLinked()) return serverTimes.map(entry => ({ ...entry }));
+    return withLocalDemoStock(item, iso, serverTimes);
+  }
   return shared ? shared.getTeeTimes(item.id, iso, demoTimesForDate(item, iso)) : demoTimesForDate(item, iso);
 };
 const timesFor = (item, iso = calendarDate) => rawTimesFor(item, iso).map(entry => {
@@ -661,7 +671,9 @@ function detail() {
     <div class="date-row">${dateOptions().map(item => `<button type="button" class="date ${date === item.label ? 'active' : ''}" data-date="${item.label}" data-iso="${item.iso}"><strong>${Number(item.iso.slice(5, 7))}/${Number(item.iso.slice(8, 10))}</strong><span>${weekdayLabels[new Date(`${item.iso}T00:00:00`).getDay()]}</span></button>`).join('')}</div>
     <div class="chips session-chips">${['all', '1부', '2부', '3부'].map(value => `<button class="chip ${detailSession === value ? 'active' : ''}" data-session="${value}">${value === 'all' ? '전체' : value}</button>`).join('')}</div>
     <h3 class="tee-subtitle">시연용 티타임 <small>${sessionTimes.length}개 · ${people}명 기준</small></h3>
-    ${sessionTimes.some(slot => slot.serverManaged) ? '<p class="demo-warning">이 티타임은 골프장이 서버에 등록한 운영 정보입니다. 예약 확정·재고 차감은 이 브라우저의 시연 예약으로만 처리되며 서버 재고와 연동되지 않습니다(8단계).</p>' : ''}
+    ${sessionTimes.some(slot => slot.serverManaged) ? (inventoryLinked()
+      ? '<p class="linked-note">예약 재고가 서버와 실시간으로 공유됩니다. 예약하면 이 티타임의 잔여 팀이 모든 기기에서 함께 줄어들고, 취소하면 복구됩니다(시연용).</p>'
+      : '<p class="demo-warning">이 티타임은 골프장이 서버에 등록한 운영 정보입니다. 예약 확정·재고 차감은 이 브라우저의 시연 예약으로만 처리되며 서버 재고와 연동되지 않습니다.</p>') : ''}
     <div class="time-list">${sessionTimes.length ? sessionTimes.map(slot => {
       const tooSmall = Number(slot.maxPlayers || 4) < people;
       return `<div class="time ${slot.closed ? 'closed-time' : ''} ${tooSmall ? 'unavailable' : ''}">
@@ -744,20 +756,121 @@ function captureBookingDraft() {
   };
 }
 function releaseActiveHold() {
-  if (activeHold && shared?.releaseTeeHold) shared.releaseTeeHold(activeHold.id, bookingSessionId);
+  if (activeHold) {
+    if (activeHold.server === true) {
+      if (serverReservations && serverReservations.release) serverReservations.release(activeHold.id);
+    } else if (shared?.releaseTeeHold) {
+      shared.releaseTeeHold(activeHold.id, bookingSessionId);
+    }
+  }
   activeHold = null;
   if (holdTicker) { clearInterval(holdTicker); holdTicker = null; }
+}
+/* 임시 확보 남은 시간 표시. 서버 Hold 는 서버가 준 만료 시각을 그대로 쓴다. */
+function startHoldCountdown(expiresAt) {
+  const countdown = document.querySelector('#hold-countdown');
+  const tick = () => {
+    const left = Math.max(0, expiresAt - Date.now());
+    const minutes = String(Math.floor(left / 60000)).padStart(2, '0');
+    const seconds = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
+    if (countdown) countdown.textContent = `남은 시간 ${minutes}:${seconds}`;
+    if (left <= 0) {
+      if (holdTicker) { clearInterval(holdTicker); holdTicker = null; }
+      activeHold = null;
+      const confirmButton = document.querySelector('#confirm-reserve');
+      if (confirmButton) { confirmButton.disabled = true; confirmButton.textContent = '시간 만료'; }
+      if (countdown) countdown.textContent = '임시 확보 시간이 끝났습니다.';
+    }
+  };
+  tick();
+  if (holdTicker) clearInterval(holdTicker);
+  holdTicker = setInterval(tick, 1000);
+}
+function paymentModalMarkup(p) {
+  return `<h2>시연 결제 확인</h2><p>${esc(course.name)}<br>${esc(date)} ${esc(tee.time)} · <b>${people}명</b></p>
+    <div class="hold-notice"><b>티타임 임시 확보</b><span>중복 예약을 막기 위해 5분 동안 확보합니다.</span><span class="hold-countdown" id="hold-countdown">남은 시간 05:00</span></div>
+    <strong>시연 예약금 ${won(p.paidDeposit)}</strong>
+    <p class="modal-note">${inventoryLinked() ? '서버가 잔여 팀을 확보했으며, 확정 시 모든 기기의 재고에서 차감됩니다.' : demoNotice}</p>
+    <div class="modal-actions"><button class="home-button" id="close-modal">돌아가기</button><button class="primary" id="confirm-reserve">시연 결제 완료</button></div>`;
 }
 function reserve() {
   captureBookingDraft();
   const name = bookingDraft.booker;
   const phone = formatPhone(bookingDraft.phone);
-  const request = bookingDraft.request;
-  const companions = bookingDraft.companions.filter(Boolean);
   if (!name) { toast('예약자 이름을 입력해주세요.'); document.querySelector('#booker')?.focus(); return; }
   if (!isValidPhone(phone)) { toast('휴대전화번호 형식을 확인해주세요.'); document.querySelector('#phone')?.focus(); return; }
-
   tee = timesFor(course).find(item => item.id === tee.id) || tee;
+  if (serverReservations && serverReservations.linked() && inventoryLinked()) {
+    reserveServer(name, phone);
+    return;
+  }
+  reserveLocal(name, phone);
+}
+
+/* 8단계: 서버 예약 — Hold 확보 → 서버 확정(원자적 재고 차감·멱등 키) */
+function reserveServer(name, phone) {
+  const request = bookingDraft.request;
+  const companions = bookingDraft.companions.filter(Boolean);
+  const selectedTee = timesFor(course).find(item => item.id === tee.id) || tee;
+  tee = selectedTee;
+  const p = paymentFor(course, selectedTee, people);
+  modal(`<h2>예약 재고 확인 중</h2><p>${esc(course.name)}<br>${esc(date)} ${esc(selectedTee.time)}</p><div class="notice">서버에서 잔여 팀을 확인하고 5분 동안 임시 확보합니다.</div>`);
+  serverReservations.hold({ courseId: course.id, date: calendarDate, teeTimeId: selectedTee.id, people }).then(result => {
+    if (!result.ok) {
+      modal(`<h2>잠시 예약할 수 없습니다</h2><p>${esc(result.message || '방금 마감된 티타임입니다. 다른 시간을 선택해주세요.')}</p><button class="primary" id="close-modal">확인</button>`);
+      const closeButton = document.querySelector('#close-modal');
+      if (closeButton) closeButton.onclick = () => modal();
+      if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate, { force: true });
+      return;
+    }
+    activeHold = { ...result.hold, server: true };
+    const closePayment = () => { releaseActiveHold(); modal(); };
+    modal(paymentModalMarkup(p));
+    startHoldCountdown(new Date(activeHold.expiresAt).getTime());
+    document.querySelector('#close-modal').onclick = closePayment;
+    const backdrop = document.querySelector('.modal-backdrop');
+    if (backdrop) backdrop.onclick = closePayment;
+    const idempotencyKey = `ag-${bookingSessionId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    document.querySelector('#confirm-reserve').onclick = async event => {
+      if (event.target.disabled) return;
+      event.target.disabled = true;
+      event.target.textContent = '처리 중...';
+      const holdId = activeHold ? activeHold.id : null;
+      const result2 = await serverReservations.confirm({
+        courseId: course.id, date: calendarDate, teeTimeId: selectedTee.id, people,
+        booker: name, phone, request, companions, holdId, idempotencyKey,
+        terms: bookingDraft.terms, refund: bookingDraft.refund
+      });
+      if (holdTicker) { clearInterval(holdTicker); holdTicker = null; }
+      activeHold = null;
+      if (!result2.ok) {
+        modal(`<h2>예약하지 못했습니다</h2><p>${esc(result2.message || '잠시 후 다시 시도해주세요.')}</p><button class="primary" id="close-modal">확인</button>`);
+        const closeButton = document.querySelector('#close-modal');
+        if (closeButton) closeButton.onclick = () => modal();
+        if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate, { force: true });
+        return;
+      }
+      const reservation = result2.reservation;
+      localStorage.setItem('allGolfLastReservation', reservation.id);
+      pushRecentSearch({ query, region, city, date: calendarDate, people });
+      bookingDraft = { booker: '', phone: '', request: '', companions: [], terms: false, refund: false };
+      currentReservationId = reservation.id;
+      modal();
+      if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate, { force: true });
+      go('complete');
+    };
+  }).catch(() => {
+    modal('<h2>서버에 연결할 수 없습니다</h2><p>예약을 확정하지 못했습니다. 잠시 후 다시 시도해주세요.</p><button class="primary" id="close-modal">확인</button>');
+    const closeButton = document.querySelector('#close-modal');
+    if (closeButton) closeButton.onclick = () => modal();
+  });
+}
+
+/* 정적 시연 모드: 브라우저 저장소(localStorage) 예약. 네트워크 요청 없음. */
+function reserveLocal(name, phone) {
+  const request = bookingDraft.request;
+  const companions = bookingDraft.companions.filter(Boolean);
+
   const p = paymentFor(course, tee, people);
   const holdResult = shared?.acquireTeeHold ? shared.acquireTeeHold(course.id, calendarDate, tee.id, bookingSessionId) : { ok: true, hold: null };
   if (!holdResult.ok) {
@@ -767,32 +880,14 @@ function reserve() {
   activeHold = holdResult.hold;
   const closePayment = () => { releaseActiveHold(); modal(); };
 
-  modal(`<h2>시연 결제 확인</h2><p>${esc(course.name)}<br>${esc(date)} ${tee.time} · <b>${people}명</b></p>
-    <div class="hold-notice"><b>티타임 임시 확보</b><span>중복 예약을 막기 위해 5분 동안 확보합니다.</span><span class="hold-countdown" id="hold-countdown">남은 시간 05:00</span></div>
-    <strong>시연 예약금 ${won(p.paidDeposit)}</strong>
-    <p class="modal-note">${demoNotice}</p>
-    <div class="modal-actions"><button class="home-button" id="close-modal">돌아가기</button><button class="primary" id="confirm-reserve">시연 결제 완료</button></div>`);
+  modal(paymentModalMarkup(p));
 
-  const countdown = document.querySelector('#hold-countdown');
   const expiresAt = activeHold ? new Date(activeHold.expiresAt).getTime() : Date.now() + 5 * 60 * 1000;
-  const tick = () => {
-    const left = Math.max(0, expiresAt - Date.now());
-    const minutes = String(Math.floor(left / 60000)).padStart(2, '0');
-    const seconds = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
-    if (countdown) countdown.textContent = `남은 시간 ${minutes}:${seconds}`;
-    if (left <= 0) {
-      clearInterval(holdTicker); holdTicker = null; activeHold = null;
-      const confirmButton = document.querySelector('#confirm-reserve');
-      if (confirmButton) { confirmButton.disabled = true; confirmButton.textContent = '시간 만료'; }
-      if (countdown) countdown.textContent = '임시 확보 시간이 끝났습니다.';
-    }
-  };
-  tick();
-  if (holdTicker) clearInterval(holdTicker);
-  holdTicker = setInterval(tick, 1000);
+  startHoldCountdown(expiresAt);
 
   document.querySelector('#close-modal').onclick = closePayment;
-  document.querySelector('.modal-backdrop').onclick = closePayment;
+  const backdrop = document.querySelector('.modal-backdrop');
+  if (backdrop) backdrop.onclick = closePayment;
   document.querySelector('#confirm-reserve').onclick = event => {
     if (event.target.disabled) return;
     event.target.disabled = true;
@@ -1528,6 +1623,11 @@ function render() {
 function cancelReservation(reference) {
   const target = findReservation(reference);
   if (!target) return;
+  /* 8단계: 서버 예약은 서버에서 취소·환불 계산·재고 복구를 처리한다. */
+  if (target.source === 'server' && serverReservations && serverReservations.linked()) {
+    cancelServerReservation(target);
+    return;
+  }
   const refund = shared?.calculateCancellation ? shared.calculateCancellation(target) : {
     paidDeposit: Number(target.paidDeposit ?? target.online ?? target.deposit ?? 0),
     cancellationFee: 0,
@@ -1553,6 +1653,43 @@ function cancelReservation(reference) {
     currentReservationId = result.reservation?.id || currentReservationId;
     modal();
     toast('예약을 취소했습니다. 취소 티타임이 다시 열렸습니다.');
+    go('reservations');
+  };
+}
+
+/* 8단계: 서버 예약 취소 (예약번호 + 연락처로 본인 확인) */
+function cancelServerReservation(target) {
+  const refund = shared?.calculateCancellation ? shared.calculateCancellation(target) : {
+    paidDeposit: Number(target.paidDeposit || 0),
+    cancellationFee: 0,
+    refundAmount: Number(target.paidDeposit || 0),
+    canCancel: true
+  };
+  modal(`<h2>예약 취소 확인</h2><div class="cancel-summary">
+    <p><b>${esc(target.number)}</b><br>${esc(target.courseName || '')}<br>${esc(target.dateISO || target.date)} · ${esc(target.time)}</p>
+    ${refund.deadlineAt ? `<p>취소 가능 기한: ${new Date(refund.deadlineAt).toLocaleString('ko-KR')}</p>` : ''}
+    <div><span>결제한 예약금</span><b>${won(refund.paidDeposit)}</b></div>
+    <div><span>예상 취소수수료</span><b>${won(refund.cancellationFee)}</b></div>
+    <div><span>예상 시연 환불금액</span><b>${won(refund.refundAmount)}</b></div>
+    <small>서버가 환불 규정으로 계산하며, 취소하면 잔여 팀이 모든 기기에서 복구됩니다. 실제 환불은 아닙니다.${refund.canCancel === false ? ' 취소 가능 기한이 지났습니다.' : ''}</small>
+  </div><div class="modal-actions"><button class="home-button" id="close-modal">취소하지 않기</button><button class="primary" id="confirm-cancel" ${refund.canCancel === false ? 'disabled' : ''}>예약 취소하기</button></div>`);
+  document.querySelector('#close-modal').onclick = () => modal();
+  document.querySelector('#confirm-cancel').onclick = async event => {
+    if (event.target.disabled) return;
+    event.target.disabled = true;
+    event.target.textContent = '처리 중...';
+    const result = await serverReservations.cancel(target.number, target.phone, '사용자 취소');
+    if (!result.ok) {
+      alert(result.message || '예약 취소에 실패했습니다.');
+      modal();
+      if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate, { force: true });
+      return;
+    }
+    myTab = 'cancelled';
+    currentReservationId = result.reservation?.id || currentReservationId;
+    modal();
+    toast('예약을 취소했습니다. 취소한 티타임의 잔여 팀이 복구되었습니다.');
+    if (serverCatalog && serverCatalog.ensureDate) serverCatalog.ensureDate(calendarDate, { force: true });
     go('reservations');
   };
 }
@@ -1639,7 +1776,13 @@ function boot() {
   });
   window.addEventListener('allgolf:datachange', render);
   window.addEventListener('allgolf:partnerschange', () => { refreshPartnerCourses(); render(); });
-  window.addEventListener('allgolf:reservationschange', () => { if (page === 'my' || page === 'reservations' || page === 'waitlist') render(); });
+  window.addEventListener('allgolf:reservationschange', () => {
+    if (page === 'my' || page === 'reservations' || page === 'waitlist' || page === 'complete') render();
+  });
+  /* 8단계: 다른 기기·담당자·본사가 예약을 바꾸면 내 예약 목록을 다시 받아 반영한다. */
+  window.addEventListener('allgolf:serverreservationschange', () => {
+    if (serverReservations && serverReservations.linked()) serverReservations.syncMine({ force: true });
+  });
   window.addEventListener('allgolf:catalogchange', render);
   window.addEventListener('allgolf:apimodechange', () => {
     refreshPartnerCourses();
@@ -1648,5 +1791,7 @@ function boot() {
   });
 
   render();
+  /* 서버 연동(8단계)이면 이 브라우저에서 예약한 연락처의 서버 예약을 받아 목록에 합친다. */
+  if (serverReservations && serverReservations.linked()) serverReservations.syncMine();
 }
 boot();

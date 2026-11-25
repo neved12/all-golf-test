@@ -288,7 +288,7 @@ async function main() {
       fetch: (input, init) => fetch(String(input).startsWith('http') ? input : `${base}${input}`, init),
       URLSearchParams, URL, AbortController, TextEncoder, TextDecoder,
       setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-      console, alert: message => { alerts.push(String(message)); }, confirm: () => true, prompt: () => '',
+      console, alert: message => { alerts.push(String(message)); }, confirm: () => true, prompt: () => '고객 요청',
       CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
       EventSource: undefined,
       scrollTo() {}
@@ -345,6 +345,26 @@ async function main() {
     const rates = await api('GET', '/api/partner/rates', partnerSandbox.ALL_GOLF_API.getPartnerToken());
     eq('화면에서 저장한 3인 그린피가 서버에 반영', rates.data.rates.threePlayerGreenFee, 175000);
 
+    /* 8단계: 서버 예약이 파트너 화면에 표시되고 취소 처리까지 동작한다. */
+    const hold = await api('POST', '/api/public/holds', null, { courseId, date: iso, teeTimeId: savedTees.data.teeTimes[0].id, people: 4, sessionId: 'ui-hold' });
+    eq('화면 검증용 Hold 생성', hold.status, 201);
+    const createdReservation = await api('POST', '/api/public/reservations', null, {
+      courseId, date: iso, teeTimeId: savedTees.data.teeTimes[0].id, people: 4,
+      booker: 'UI고객', phone: '010-7777-8888', companions: ['UI동반'], holdId: hold.data.hold.id, sessionId: 'ui-hold'
+    });
+    eq('화면 검증용 서버 예약 생성', createdReservation.status, 201);
+    const createdNumber = createdReservation.data.reservation.number;
+    dom.document.querySelector('[data-view="bookings"]').click();
+    await sleep(1200);
+    ok('파트너 예약 관리에 서버 예약 표시', domText(dom).includes(createdNumber) && domText(dom).includes('UI고객'), domText(dom).slice(0, 220));
+    ok('파트너 예약 통계 표시', domText(dom).includes('확정 1건') || domText(dom).includes('전체 예약'), domText(dom).slice(0, 220));
+    dom.document.querySelector('[data-server-reservation-status][data-server-status="cancelled"]')?.click();
+    await sleep(1500);
+    const partnerReservationsAfter = await api('GET', '/api/partner/reservations', partnerSandbox.ALL_GOLF_API.getPartnerToken());
+    ok('파트너 화면에서 예약 취소 반영', (partnerReservationsAfter.data.reservations || []).some(item => item.number === createdNumber && item.status === 'cancelled'), JSON.stringify(partnerReservationsAfter.data.reservations || []).slice(0, 200));
+    const inventoryAfterCancel = await api('GET', `/api/public/inventory?date=${iso}&courseId=${encodeURIComponent(courseId)}`);
+    eq('취소 후 잔여 팀 복구', inventoryAfterCancel.data.courses[0].teeTimes[0].remaining, 2);
+
     dom.document.querySelector('#logout').click();
     await sleep(600);
     ok('로그아웃 후 로그인 화면', domText(dom).includes('골프장 관리자 로그인'));
@@ -360,7 +380,7 @@ async function main() {
       fetch: (input, init) => fetch(String(input).startsWith('http') ? input : `${base}${input}`, init),
       URLSearchParams, URL, AbortController,
       setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
-      console, alert: message => { alerts.push(String(message)); }, confirm: () => true, prompt: () => '',
+      console, alert: message => { alerts.push(String(message)); }, confirm: () => true, prompt: () => '고객 요청',
       CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
       EventSource: undefined,
       scrollTo() {}
@@ -409,11 +429,22 @@ async function main() {
     ok('골프장 운영 현황 렌더', domText(adminDom).includes('UI 스모크 CC') && domText(adminDom).includes('등록 티타임'), domText(adminDom).slice(0, 200));
     ok('운영 현황에 화면에서 등록한 티타임 1건', domText(adminDom).includes('07:40') || domText(adminDom).includes('1건'));
 
+    adminDom.document.querySelector('[data-page="reservations"]').click();
+    await sleep(1600);
+    ok('본사 전체 예약 화면에 서버 예약 표시', domText(adminDom).includes(createdNumber) && domText(adminDom).includes('UI고객'), domText(adminDom).slice(0, 220));
+    ok('본사 예약 화면에 예약 통계', domText(adminDom).includes('전체 예약'), domText(adminDom).slice(0, 200));
+    adminDom.document.querySelector('[data-admin-reservation]')?.click();
+    await sleep(900);
+    ok('본사 예약 상세 모달 열림', domText(adminDom).includes('예약 상세') && domText(adminDom).includes('예약자'), adminDom.modal.innerHTML.slice(0, 200));
+    adminDom.document.querySelector('[data-close]')?.click();
+
     adminDom.document.querySelector('[data-page="audit"]').click();
     await sleep(1500);
     ok('감사 로그에 담당자 로그인 기록', domText(adminDom).includes('담당자 로그인'), domText(adminDom).slice(0, 200));
     ok('감사 로그에 티타임 등록 기록', domText(adminDom).includes('티타임 등록'));
-    ok('스모크 중 예기치 않은 alert 없음', alerts.filter(message => !message.includes('건 등록') && !message.includes('저장되었습니다')).length === 0, alerts.join(' | '));
+    ok('감사 로그에 예약 확정 기록', domText(adminDom).includes('예약 확정'), domText(adminDom).slice(0, 200));
+    ok('감사 로그에 예약 취소 기록', domText(adminDom).includes('예약 취소'));
+    ok('스모크 중 예기치 않은 alert 없음', alerts.filter(message => !message.includes('건 등록') && !message.includes('저장되었습니다') && !message.includes('예약을 취소했습니다')).length === 0, alerts.join(' | '));
   } finally {
     await stopServer(server);
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }

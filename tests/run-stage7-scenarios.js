@@ -126,7 +126,8 @@ async function main() {
     server = await startServer(env);
     const health = await waitForHealth(base);
     ok('서버 기동 · /api/health 200', health && health.ok === true);
-    eq('7단계 서버 표시', health.stage, 7);
+    /* 8단계에서 health.stage 가 8 로 올라가도 7단계 기능이 그대로 있음을 확인한다. */
+    ok('7단계 서버 표시(8단계 이상)', Number(health.stage) >= 7, health.stage);
     ok('골프장 계정 기능 표시', health.features && health.features.partnerAccounts === true);
     ok('공개 카탈로그 기능 표시', health.features && health.features.publicCatalog === true);
     ok('DB 7단계 컬렉션 초기값', health.db && health.db.teeTimes === 0 && health.db.partnerAccounts === 0);
@@ -376,7 +377,8 @@ async function main() {
     eq('2인 1인 그린피', publicTee.priceByPlayers['2'], 165000);
     eq('3인 1인 그린피', publicTee.priceByPlayers['3'], 180000);
     eq('4인 1인 그린피', publicTee.priceByPlayers['4'], 150000);
-    ok('재고 연동 아님을 명시', catalog.data.inventoryLinked === false && String(catalog.data.inventoryNote).includes('8단계'));
+    /* 8단계에서 재고가 서버로 이전되어 inventoryLinked 가 true 로 바뀌었다(7단계 한계 문구 제거). */
+    ok('재고 연동 상태 명시(8단계: true)', catalog.data.inventoryLinked === true && String(catalog.data.inventoryNote).includes('서버'), catalog.data.inventoryNote);
     ok('관리 골프장 목록 제공', Array.isArray(catalog.data.managedCourseIds) && catalog.data.managedCourseIds.includes(courseA));
     ok('카탈로그에 계정 이메일 없음', !catalog.text.includes('alpha@stage7.example.com'));
     ok('카탈로그에 비밀번호 해시 없음', !catalog.text.includes('passwordHash'));
@@ -468,7 +470,8 @@ async function main() {
     await stopServer(server);
     ok('DB 파일 존재', fs.existsSync(dbPath));
     const rawDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-    ok('DB 버전 2', rawDb.version === 2);
+    /* 8단계에서 스키마 버전 3 으로 올라갔다(7단계 데이터는 자동 호환). */
+    ok('DB 버전 3(7단계 데이터 호환)', rawDb.version === 3, rawDb.version);
     eq('DB에 담당자 계정 3개', (rawDb.partnerAccounts || []).length, 3);
     eq('DB에 티타임 2건', (rawDb.teeTimes || []).length, 2);
     ok('DB에 요금·특가 저장', Boolean(rawDb.rates[courseA]) && (rawDb.specialOffers || []).length === 1);
@@ -551,7 +554,7 @@ async function main() {
     eq('고객 앱 특가 할인율', app.times[0].specialOffer && app.times[0].specialOffer.discountRate, 20);
     eq('고객 앱 3인 추가금 반영', app.playerSurcharge(3), 30000);
     eq('고객 앱 4인 추가금 없음', app.playerSurcharge(4), 0);
-    eq('시연 예약 1건 반영 후 잔여 감소', app.remainingAfterReservation(), 2);
+    eq('서버 연동 시 서버 재고 그대로 사용(로컬 중복 차감 없음)', app.remainingAfterReservation(), 2);
     app.reset();
     ok('서버 카탈로그가 없으면 기존 시연 티타임', app.demoFallbackCount() > 0, app.demoFallbackCount());
     eq('정적 모드에서 서버 카탈로그 요청 없음', staticClient.calls(), 0);
@@ -684,6 +687,7 @@ function runAppWithServerCatalog(payload, coursesPayload, courseId) {
       teeTimesFor(course, date) { return String(course) === String(entry.courseId) ? serverTimes : null; },
       ensureDate() { return Promise.resolve(true); },
       isServer() { return true; },
+      inventoryLinked() { return true; },
       applyPayload() { return true; }
     };
     /* ===== app.js ===== */

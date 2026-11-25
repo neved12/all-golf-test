@@ -10,7 +10,7 @@ const path = require('path');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function emptyDatabase() {
   return {
@@ -115,6 +115,9 @@ class Store {
       activePartnerAccounts: db.partnerAccounts.filter(item => item.status === 'active').length,
       teeTimes: db.teeTimes.length,
       specialOffers: db.specialOffers.filter(item => !item.deletedAt).length,
+      reservations: db.reservations.length,
+      confirmedReservations: db.reservations.filter(item => item.status === 'confirmed').length,
+      activeHolds: db.bookingHolds.filter(item => item.status === 'active').length,
       auditLogs: db.auditLogs.length,
       revision: db.meta.revision,
       updatedAt: db.meta.updatedAt
@@ -246,7 +249,9 @@ class Store {
           approvedCourses: parsed.approvedCourses.length,
           partnerAccounts: parsed.partnerAccounts.length,
           teeTimes: parsed.teeTimes.length,
-          specialOffers: parsed.specialOffers.length
+          specialOffers: parsed.specialOffers.length,
+          reservations: parsed.reservations.length,
+          holds: parsed.bookingHolds.length
         }
       };
     } finally {
