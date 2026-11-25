@@ -15,6 +15,7 @@ const { Store } = require('./lib/db');
 const { Auth } = require('./lib/auth');
 const { PartnerAuth } = require('./lib/partner-auth');
 const accounts = require('./lib/accounts');
+const reservations = require('./lib/reservations');
 const { createApi } = require('./routes/api');
 const helper = require('./lib/http');
 
@@ -66,6 +67,26 @@ function createServer() {
   }
   const api = createApi({ store, auth, partnerAuth, catalog, config });
 
+  /* 8단계: 만료된 임시확보(Hold)를 주기적으로 정리해 잔여 팀을 복구한다.
+     (조회·예약 시점에도 시간 기준으로 제외되므로 정리가 늦어도 예약은 막히지 않는다.) */
+  let sweeper = null;
+  if (config.holdSweepMs > 0) {
+    sweeper = setInterval(async () => {
+      try {
+        const db = store.read();
+        const hasExpired = (db.bookingHolds || []).some(hold => hold.status === 'active' && Date.parse(hold.expiresAt) <= Date.now());
+        if (!hasExpired) return;
+        const { result } = await store.update(current => reservations.sweepExpiredHolds(current));
+        if (result > 0) {
+          api.broadcast('inventory.changed', { reason: 'holds-expired', expired: result, at: new Date().toISOString() });
+        }
+      } catch (error) {
+        console.error('[ALL:GOLF] 임시확보 정리 실패:', error && error.message);
+      }
+    }, config.holdSweepMs);
+    if (sweeper.unref) sweeper.unref();
+  }
+
   const server = http.createServer(async (req, res) => {
     const started = Date.now();
     let url;
@@ -106,7 +127,7 @@ function createServer() {
     }
   });
 
-  return { server, store, auth, api, catalog };
+  return { server, store, auth, api, catalog, stopSweeper: () => { if (sweeper) clearInterval(sweeper); } };
 }
 
 function start() {
@@ -126,7 +147,7 @@ function start() {
     const address = server.address();
     const port = address && typeof address === 'object' ? address.port : config.port;
     console.log('');
-    console.log('  ALL:GOLF 7단계 서버 (시연용 · 실제 결제/예약 아님)');
+    console.log('  ALL:GOLF 8단계 서버 (시연용 · 실제 결제/예약 아님)');
     console.log(`  사용자 앱      http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/`);
     console.log(`  골프장 관리자  http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/partner/`);
     console.log(`  본사 관리자    http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/admin/`);
@@ -135,6 +156,7 @@ function start() {
     console.log(`  골프장 마스터  ${catalog.courses.length}곳 · 기본 제휴 ${catalog.baselinePartnerIds.length}곳`);
     console.log(`  관리자 계정    ${config.adminEmail} / ${config.usingDefaultPassword ? `시연용 기본 비밀번호 ${config.DEMO_ADMIN_PASSWORD}` : '환경변수 ADMIN_PASSWORD'}`);
     console.log('  골프장 계정    본사 관리자 화면 > 제휴 계정 관리에서 생성 (골프장별 개별 로그인)');
+    console.log(`  예약 재고      서버 예약·임시확보 기준 · Hold TTL ${Math.round(config.holdTtlMs / 1000)}초 · ${Math.round(config.holdSweepMs / 1000)}초마다 만료 정리`);
     if (config.seedDemoPartnerAccounts) {
       console.log(`  시연 담당자    자동 생성 켜짐 · 비밀번호 ${config.demoPartnerPassword}`);
     }

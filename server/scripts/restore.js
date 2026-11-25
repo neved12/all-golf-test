@@ -23,7 +23,7 @@ const { Store } = require('../lib/db');
   }
   const result = await store.restore(path.resolve(target));
   console.log(`복구 완료: ${result.restoredFrom}`);
-  console.log(`신청 ${result.counts.applications}건 · 승인 골프장 ${result.counts.approvedCourses || 0}곳 · 담당자 계정 ${result.counts.partnerAccounts || 0}개 · 티타임 ${result.counts.teeTimes || 0}건`);
+  console.log(`신청 ${result.counts.applications}건 · 승인 골프장 ${result.counts.approvedCourses || 0}곳 · 담당자 계정 ${result.counts.partnerAccounts || 0}개 · 티타임 ${result.counts.teeTimes || 0}건 · 예약 ${result.counts.reservations || 0}건 · 임시확보 ${result.counts.holds || 0}건`);
 })().catch(error => {
   console.error('복구 실패:', error.message);
   process.exit(1);

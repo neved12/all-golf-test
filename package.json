@@ -1,12 +1,12 @@
 {
   "name": "all-golf-test",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "private": true,
-  "description": "ALL:GOLF 시연용 골프 예약 서비스. 정적 데모(GitHub Pages)와 무의존성 Node.js 서버를 함께 제공합니다.",
+  "description": "ALL:GOLF 시연용 골프 예약 서비스(8단계: 서버 예약·원자적 재고·취소/환불). 정적 데모(GitHub Pages)와 무의존성 Node.js 서버를 함께 제공합니다.",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "test": "node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js",
+    "test": "node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js && node tests/run-stage8-scenarios.js",
     "test:regression": "node tests/run-scenarios.js",
     "test:server": "node tests/run-server-scenarios.js",
     "test:stage7": "node tests/run-stage7-scenarios.js",
@@ -14,7 +14,8 @@
     "db:backup": "node server/scripts/backup.js",
     "db:restore": "node server/scripts/restore.js",
     "db:reset-demo": "node server/scripts/reset-demo.js",
-    "demo:partner-accounts": "node server/scripts/seed-partner-accounts.js"
+    "demo:partner-accounts": "node server/scripts/seed-partner-accounts.js",
+    "test:stage8": "node tests/run-stage8-scenarios.js"
   },
   "engines": {
     "node": ">=18"

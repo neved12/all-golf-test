@@ -291,3 +291,6 @@ main { padding:0 18px 30px; }
 .partner-invite p{margin:7px 0 0;font-size:11px;color:var(--muted);line-height:1.6}
 .partner-invite .kicker{color:var(--mint);font-weight:800;font-size:11px}
 .partner-invite-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:11px 13px;border-radius:10px;font-size:12px;font-weight:800}
+
+/* 8단계: 서버 예약·재고 실시간 연동 안내 */
+.linked-note{display:flex;align-items:center;gap:6px;margin:8px 0 4px;padding:8px 10px;border:1px solid #8cdec0;background:#effcf6;border-radius:10px;color:#087857;font-size:10px;font-weight:700;line-height:1.5}

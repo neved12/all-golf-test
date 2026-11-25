@@ -27,8 +27,76 @@ function reservationTable(reservations){
   const rows=reservations.map(item=>`<tr><td>${item.number}</td><td>${item.courseName||item.course||'-'}</td><td>${item.booker||item.name||'-'}</td><td>${item.phone||'-'}</td><td>${item.date}</td><td>${item.time}</td><td>${item.people}인</td><td>${money(item.paidDeposit??item.deposit)}</td><td>${money(item.onsite)}</td><td><span class="badge ${item.status==='cancelled'?'bad':''}">${item.status==='cancelled'?'취소 완료':'예약 확정'}</span></td><td><button class="secondary" data-reservation="${item.id}">상세</button></td></tr>`).join('');
   return `<div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>골프장</th><th>예약자</th><th>연락처</th><th>날짜</th><th>시간</th><th>인원</th><th>예약금</th><th>현장결제</th><th>상태</th><th>상세</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-function reservations(){return shell('전체 예약 관리',`<section class="panel"><div class="head"><h2>전체 예약</h2><div class="tools"><button class="secondary">예약 상태</button><button class="secondary">결제 상태</button></div></div>${reservationTable(get(RKEY))}</section>`)}
-function refunds(){const items=get(RKEY).filter(item=>item.status==='cancelled');if(!items.length)return shell('취소·환불 관리','<section class="panel"><div class="head"><h2>취소 요청</h2></div><div class="empty">취소 요청이 없습니다.</div></section>');const rows=items.map(item=>`<tr><td>${item.number}</td><td>${item.courseName||item.course||'-'}</td><td>${item.booker||item.name||'-'}</td><td>${item.date}</td><td>${money(item.paidDeposit??item.deposit)}</td><td>${money(item.refundAmount??item.paidDeposit??item.deposit)}</td><td><span class="badge bad">취소 완료</span></td><td><button class="primary" data-refund="${item.id}">확인</button></td></tr>`).join('');return shell('취소·환불 관리',`<section class="panel"><div class="head"><h2>취소 내역</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>골프장</th><th>예약자</th><th>이용일</th><th>예약금</th><th>환불액</th><th>처리 상태</th><th>관리</th></tr></thead><tbody>${rows}</tbody></table></div></section>`)}
+function reservations(){
+  if(isServerMode()){
+    return shell('전체 예약 관리',`<section class="panel"><div class="head"><div><h2>전체 예약</h2><p class="admin-caption">서버 예약입니다. 확정·취소·환불 계산과 재고 복구는 서버가 처리하며, 모든 골프장 예약을 조회할 수 있습니다.</p></div><div class="tools"><input class="date-picker" id="reservation-date" type="date" value="${reservationDate}"><select id="reservation-status"><option value="all">전체 상태</option>${[['confirmed','예약 확정'],['cancelled','취소'],['completed','이용 완료'],['no_show','노쇼']].map(([value,label])=>`<option value="${value}" ${reservationFilter===value?'selected':''}>${label}</option>`).join('')}</select><button class="secondary" id="refresh-reservations">새로고침</button></div></div><div id="reservations-root"><div class="notice">서버에서 불러오는 중…</div></div></section>`);
+  }
+  return shell('전체 예약 관리',`<section class="panel"><div class="head"><h2>전체 예약</h2><div class="tools"><button class="secondary">예약 상태</button><button class="secondary">결제 상태</button></div></div>${reservationTable(get(RKEY))}</section>`)
+}
+let adminReservations=[],adminReservationStats=null,reservationFilter='all',reservationDate='',reservationsLoading=false;
+async function loadAdminReservations(){
+  const root=document.querySelector('#reservations-root');
+  if(!root||!isServerMode()||reservationsLoading)return;
+  reservationsLoading=true;
+  const params=new URLSearchParams();
+  if(reservationFilter&&reservationFilter!=='all')params.set('status',reservationFilter);
+  if(reservationDate)params.set('date',reservationDate);
+  const response=await apiClient.request(`/api/admin/reservations${params.toString()?'?'+params.toString():''}`,{token:adminToken(),timeoutMs:10000});
+  reservationsLoading=false;
+  if(!response.ok){root.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'예약을 불러오지 못했습니다.')}</div>`;handleAdminError(response);return}
+  adminReservations=response.data.reservations||[];
+  adminReservationStats=response.data.stats||{};
+  root.innerHTML=adminReservationsBody(response.data);
+  bindAdminReservationActions();
+}
+function adminReservationStatusLabel(item){return ({confirmed:'예약 확정',cancelled:'취소',completed:'이용 완료',no_show:'노쇼'})[item.status]||item.status}
+function adminReservationsBody(data){
+  const stats=data.stats||{},items=data.reservations||[];
+  return `<section class="national-kpis application-kpis">${[['전체 예약',stats.total||0],['확정',stats.confirmed||0],['취소',stats.cancelled||0],['확정 인원',stats.people||0],['진행 중 임시확보',data.activeHolds||0]].map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><p class="notice">취소 시 환불률은 골프장 요금 설정의 취소·환불 정책으로 계산되며, 취소한 티타임의 잔여 팀은 즉시 복구됩니다. 실제 결제·환불은 아닙니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>골프장</th><th>라운드</th><th>예약자</th><th>연락처</th><th>인원</th><th>예약금</th><th>환불</th><th>상태</th><th>관리</th></tr></thead><tbody>${items.map(item=>`<tr><td><b>${esc(item.number)}</b><small class="demo-cell">${esc(String(item.createdAt||'').slice(0,16).replace('T',' '))}</small></td><td>${esc(item.courseName||item.courseId||'-')}</td><td>${esc(item.date||item.dateISO||'-')} ${esc(item.time||'')}</td><td>${esc(item.booker||'-')}</td><td>${esc(item.phone||'-')}</td><td>${Number(item.people)||0}명</td><td>${money(item.paidDeposit)}</td><td>${item.status==='cancelled'?money(item.refundAmount||0):'-'}</td><td><span class="badge ${item.status==='cancelled'?'bad':item.status==='no_show'?'warn':''}">${esc(adminReservationStatusLabel(item))}</span></td><td><button class="secondary" data-admin-reservation="${esc(item.id)}">상세</button>${item.status==='confirmed'?` <button class="danger" data-admin-reservation-cancel="${esc(item.id)}">취소</button>`:''}</td></tr>`).join('')||'<tr><td colspan="10" class="empty">조건에 맞는 예약이 없습니다.</td></tr>'}</tbody></table></div>`;
+}
+function bindAdminReservationActions(){
+  document.querySelectorAll('[data-admin-reservation]').forEach(button=>button.onclick=()=>adminReservationModal(button.dataset.adminReservation));
+  document.querySelectorAll('[data-admin-reservation-cancel]').forEach(button=>button.onclick=()=>adminChangeReservation(button.dataset.adminReservationCancel,'cancelled'));
+  document.querySelector('#refresh-reservations')?.addEventListener('click',loadAdminReservations);
+  document.querySelector('#reservation-status')?.addEventListener('change',event=>{reservationFilter=event.target.value;loadAdminReservations()});
+  document.querySelector('#reservation-date')?.addEventListener('change',event=>{reservationDate=event.target.value;loadAdminReservations()});
+}
+async function adminReservationModal(id){
+  modal.innerHTML='<div class="modal-bg"><section class="modal application-modal"><h2>예약 상세</h2><p class="notice">불러오는 중…</p></section></div>';
+  const response=await apiClient.request(`/api/admin/reservations/${encodeURIComponent(id)}`,{token:adminToken(),timeoutMs:8000});
+  if(!response.ok){close();handleAdminError(response);if(response.status!==401&&response.status!==403)alert((response.error&&response.error.message)||'예약을 불러오지 못했습니다.');return}
+  const r=response.data.reservation||{},quote=r.quote||{};
+  modal.innerHTML=`<div class="modal-bg"><section class="modal application-modal"><h2>예약 상세</h2><p><b>${esc(r.number||'')}</b> · ${esc(r.courseName||'')} · ${esc(adminReservationStatusLabel(r))}</p><dl class="application-detail"><div><dt>예약자</dt><dd>${esc(r.booker||'-')} · ${esc(r.phone||'-')}</dd></div><div><dt>라운드</dt><dd>${esc(r.date||r.dateISO||'')} ${esc(r.time||'')} · ${Number(r.people)||0}명</dd></div><div><dt>동반자</dt><dd>${r.companions&&r.companions.length?esc(r.companions.join(' · ')):'입력 없음'}</dd></div>${r.specialOfferName?`<div><dt>적용 특가</dt><dd>${esc(r.specialOfferName)}</dd></div>`:''}<div><dt>총 예상 이용금액</dt><dd>${money(r.totalEstimated)}</dd></div><div><dt>예약금</dt><dd>${money(r.paidDeposit)}</dd></div><div><dt>현장 결제 예정</dt><dd>${money(r.onsite)}</dd></div>${r.status==='cancelled'?`<div><dt>취소 일시</dt><dd>${esc(String(r.cancelledAt||'').slice(0,16).replace('T',' '))}</dd></div><div><dt>취소 사유</dt><dd>${esc(r.cancelReason||'-')}</dd></div><div><dt>취소수수료</dt><dd>${money(r.cancellationFee||0)}</dd></div><div><dt>시연 환불 금액</dt><dd>${money(r.refundAmount||0)}</dd></div>`:`<div><dt>지금 취소 시</dt><dd>환불률 ${quote.refundRate==null?'-':quote.refundRate+'%'} · 환불 ${money(quote.refundAmount||0)}</dd></div>`}</dl><p>요청사항 ${esc(r.request||'없음')}</p>${r.status==='confirmed'?`<div class="decision-box"><h3>상태 변경</h3><label class="field">변경 사유 (취소 시 필수)<textarea id="admin-reservation-reason" rows="2" placeholder="예: 고객 요청"></textarea></label><div class="actions"><button class="secondary" data-admin-status="completed">이용 완료</button><button class="secondary" data-admin-status="no_show">노쇼</button><button class="primary" data-admin-status="cancelled">취소 처리</button></div></div>`:''}<div class="modal-actions"><button class="secondary" data-close>닫기</button></div></section></div>`;
+  document.querySelector('[data-close]').onclick=close;
+  document.querySelectorAll('[data-admin-status]').forEach(button=>button.onclick=()=>adminChangeReservation(r.id,button.dataset.adminStatus,()=>adminReservationModal(r.id)));
+}
+async function adminChangeReservation(id,status,reopen){
+  const reason=(document.querySelector('#admin-reservation-reason')?.value||'').trim();
+  if(status==='cancelled'){
+    if(!reason){alert('취소 사유를 입력해주세요.');return}
+    if(!confirm('이 예약을 취소할까요? 잔여 팀이 즉시 복구되고 환불 규정이 적용됩니다.'))return;
+  }else if(!confirm(`예약 상태를 '${adminReservationStatusLabel({status})}'(으)로 변경할까요?`))return;
+  const response=await apiClient.request(`/api/admin/reservations/${encodeURIComponent(id)}/status`,{method:'POST',body:{status,reason},token:adminToken(),timeoutMs:10000});
+  if(!response.ok){
+    if(response.status===409)alert('다른 곳에서 먼저 변경했습니다. 새로고침합니다.');
+    else handleAdminError(response);
+    if(response.status!==401&&response.status!==403)alert((response.error&&response.error.message)||'변경하지 못했습니다.');
+    close();if(document.querySelector('#reservations-root'))loadAdminReservations();
+    return;
+  }
+  close();
+  if(document.querySelector('#reservations-root'))loadAdminReservations();
+  if(status==='cancelled')alert(`예약을 취소했습니다. 환불 금액 ${money((response.data.refund&&response.data.refund.refundAmount)||0)}(시연)`);
+}
+function refunds(){
+  if(isServerMode()){
+    return shell('취소·환불 관리',`<section class="panel"><div class="head"><div><h2>취소·환불 내역</h2><p class="admin-caption">서버 예약 중 취소된 건입니다. 환불 금액은 골프장 취소 정책으로 계산됩니다(시연용).</p></div><button class="secondary" id="refresh-reservations">새로고침</button></div><div id="reservations-root"><div class="notice">서버에서 불러오는 중…</div></div></section>`);
+  }
+  const items=get(RKEY).filter(item=>item.status==='cancelled');
+  if(!items.length)return shell('취소·환불 관리','<section class="panel"><div class="head"><h2>취소 요청</h2></div><div class="empty">취소 요청이 없습니다.</div></section>');
+  const rows=items.map(item=>`<tr><td>${item.number}</td><td>${item.courseName||item.course||'-'}</td><td>${item.booker||item.name||'-'}</td><td>${item.date}</td><td>${money(item.paidDeposit??item.deposit)}</td><td>${money(item.refundAmount??item.paidDeposit??item.deposit)}</td><td><span class="badge bad">취소 완료</span></td><td><button class="primary" data-refund="${item.id}">확인</button></td></tr>`).join('');
+  return shell('취소·환불 관리',`<section class="panel"><div class="head"><h2>취소 내역</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>골프장</th><th>예약자</th><th>이용일</th><th>예약금</th><th>환불액</th><th>처리 상태</th><th>관리</th></tr></thead><tbody>${rows}</tbody></table></div></section>`)
+}
 function members(){let m=get(MKEY),r=get(RKEY);return shell('회원 관리',`<section class="panel"><div class="head"><h2>회원 목록</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>회원번호</th><th>이름</th><th>휴대전화</th><th>이메일</th><th>가입일</th><th>예약</th><th>취소</th><th>상태</th><th>관리</th></tr></thead><tbody>${m.map(x=>`<tr><td>${x.id}</td><td>${x.name}</td><td>${x.phone}</td><td>${x.email}</td><td>${x.joined}</td><td>${r.filter(y=>(y.booker||y.name)===x.name).length}건</td><td>0건</td><td><span class="badge">${x.status}</span></td><td><button class="secondary" data-member="${x.id}">상세</button></td></tr>`).join('')}</tbody></table></div></section>`)}
 function settlements(){let p=get(PKEY),r=get(RKEY).filter(x=>x.status==='confirmed');return shell('정산 관리',`<section class="panel"><div class="head"><h2>골프장별 정산</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>정산번호</th><th>골프장</th><th>기간</th><th>예약 건수</th><th>예약금 총액</th><th>수수료</th><th>지급 예정액</th><th>상태</th><th>상세</th></tr></thead><tbody>${p.map((x,i)=>{let amount=r.reduce((s,v)=>s+(v.deposit||0),0),fee=Math.round(amount*x.fee/100);return `<tr><td>ST-202608-${String(i+1).padStart(3,'0')}</td><td>${x.name}</td><td>2026.08.01~08.31</td><td>${r.length}건</td><td>${money(amount)}</td><td>${money(fee)}</td><td>${money(amount-fee)}</td><td><span class="badge warn">정산 검토</span></td><td><button class="secondary">상세</button></td></tr>`}).join('')}</tbody></table></div></section>`)}
 function banners(){return shell('배너·혜택 관리',`<section class="panel"><div class="head"><h2>홈 배너 및 혜택</h2><button class="primary" id="new-banner">+ 콘텐츠 등록</button></div><div class="notice">시연용 콘텐츠입니다. 노출 순서와 공개 여부를 관리할 수 있습니다.</div><div class="table-wrap"><table class="table"><thead><tr><th>유형</th><th>제목</th><th>연결 경로</th><th>노출 기간</th><th>상태</th><th>순서</th><th>관리</th></tr></thead><tbody><tr><td>홈 배너</td><td>제주 2박 3일 골프여행</td><td>/travel/jeju</td><td>2026.08.01~08.31</td><td><span class="badge">노출</span></td><td>1</td><td><button class="secondary">수정</button></td></tr><tr><td>특가</td><td>주말 특가 티타임</td><td>/reserve</td><td>2026.08.10~08.20</td><td><span class="badge">노출</span></td><td>2</td><td><button class="secondary">수정</button></td></tr></tbody></table></div></section>`)}
@@ -45,6 +113,7 @@ function bind(){
   if(isServerMode()&&page==='audit'){loadAuditServer('audit-root',200)}
   if(isServerMode()&&page==='accounts'){loadAccountsServer();document.querySelector('#new-partner-account')?.addEventListener('click',()=>{if(!adminCoursesCache.length){apiClient.request('/api/partner-courses',{timeoutMs:6000}).then(response=>{adminCoursesCache=(response.data&&response.data.courses)||[];newAccountModal()})}else newAccountModal()})}
   if(isServerMode()&&page==='operations'){loadOperationsServer()}
+  if(isServerMode()&&(page==='reservations'||page==='refunds')){loadAdminReservations()}
   document.querySelector('#refresh-accounts')?.addEventListener('click',loadAccountsServer);
   document.querySelector('#refresh-operations')?.addEventListener('click',loadOperationsServer);
   document.querySelector('#operations-date')?.addEventListener('change',loadOperationsServer);
@@ -189,7 +258,7 @@ async function showOperationsTees(courseId,date){
   document.querySelector('[data-close]').onclick=close;
 }
 function auditLabel(action){
-  return ({'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'본사 로그인','partner.login':'담당자 로그인','partner-account.created':'계정 생성','partner-account.updated':'계정 변경','partner-account.password-reset':'비밀번호 재설정','tee-time.created':'티타임 등록','tee-time.updated':'티타임 수정','tee-time.deleted':'티타임 삭제','tee-time.recurring':'티타임 반복 등록','rates.updated':'요금 수정','special-offer.created':'특가 등록','special-offer.updated':'특가 수정','special-offer.deleted':'특가 삭제'})[action]||action;
+  return ({'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'본사 로그인','partner.login':'담당자 로그인','partner-account.created':'계정 생성','partner-account.updated':'계정 변경','partner-account.password-reset':'비밀번호 재설정','tee-time.created':'티타임 등록','tee-time.updated':'티타임 수정','tee-time.deleted':'티타임 삭제','tee-time.recurring':'티타임 반복 등록','rates.updated':'요금 수정','special-offer.created':'특가 등록','special-offer.updated':'특가 수정','special-offer.deleted':'특가 삭제','reservation.created':'예약 확정','reservation.cancelled':'예약 취소','reservation.status-updated':'예약 상태 변경'})[action]||action;
 }
 
 function render(){

@@ -77,6 +77,15 @@ function defaultRates(course, courseId) {
     caddieFee: Number.isFinite(caddie) && caddie >= 0 ? caddie : 150000,
     depositType: 'person',
     depositValue: 30000,
+    /* 8단계: 취소·환불 규정(라운드일까지 남은 날짜 기준 예약금 환불률). */
+    cancellationPolicy: {
+      sevenPlus: 100,
+      fourToSix: 70,
+      twoToThree: 50,
+      oneDay: 0,
+      sameDay: 0,
+      cutoffHoursBefore: null
+    },
     version: 0,
     updatedAt: null,
     updatedBy: null,
@@ -90,7 +99,12 @@ function effectiveRates(db, courseId) {
   const base = defaultRates(course, courseId);
   const stored = (db.rates && db.rates[String(courseId)]) || null;
   if (!stored) return base;
-  return { ...base, ...stored, courseId: String(courseId) };
+  return {
+    ...base,
+    ...stored,
+    cancellationPolicy: { ...base.cancellationPolicy, ...(stored.cancellationPolicy || {}) },
+    courseId: String(courseId)
+  };
 }
 
 function validateRates(input) {
@@ -128,6 +142,32 @@ function validateRates(input) {
     if (depositType === 'percent' && depositValue > 100) errors.depositValue = '비율 예약금은 100%를 넘을 수 없습니다.';
     if (depositType !== 'percent' && source.depositValue === '') errors.depositValue = '예약금 금액을 입력해주세요.';
   }
+  /* 8단계: 취소·환불 정책(선택). 값이 없으면 기존 정책을 유지한다. */
+  let cancellationPolicy;
+  if (source.cancellationPolicy != null) {
+    if (typeof source.cancellationPolicy !== 'object' || Array.isArray(source.cancellationPolicy)) {
+      errors.cancellationPolicy = '취소·환불 정책 형식이 올바르지 않습니다.';
+    } else {
+      const policy = source.cancellationPolicy;
+      const next = {};
+      [['sevenPlus', '7일 전 환불률'], ['fourToSix', '4~6일 전 환불률'], ['twoToThree', '2~3일 전 환불률'], ['oneDay', '1일 전 환불률'], ['sameDay', '당일 환불률']].forEach(([field, label]) => {
+        const raw = policy[field];
+        if (raw === undefined || raw === '') return;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 100) errors.cancellationPolicy = `${label}은(는) 0~100 사이여야 합니다.`;
+        else next[field] = Math.round(value);
+      });
+      if (policy.cutoffHoursBefore !== undefined) {
+        if (policy.cutoffHoursBefore === null || policy.cutoffHoursBefore === '') next.cutoffHoursBefore = null;
+        else {
+          const value = Number(policy.cutoffHoursBefore);
+          if (!Number.isInteger(value) || value < 0 || value > 720) errors.cancellationPolicy = '취소 가능 기한은 0~720시간으로 입력해주세요.';
+          else next.cutoffHoursBefore = value;
+        }
+      }
+      cancellationPolicy = next;
+    }
+  }
   const keys = Object.keys(errors);
   return {
     ok: keys.length === 0,
@@ -144,7 +184,8 @@ function validateRates(input) {
       cartFee,
       caddieFee,
       depositType,
-      depositValue
+      depositValue,
+      ...(cancellationPolicy ? { cancellationPolicy } : {})
     }
   };
 }
@@ -271,24 +312,58 @@ function findDuplicateTeeTime(db, value, ignoreId = null) {
     && domain.text(item.course) === domain.text(value.course)) || null;
 }
 
-function remainingTeams(tee) {
-  const booked = Number(tee.bookedTeams || 0) + Number(tee.heldTeams || 0);
-  return Math.max(0, Number(tee.capacityTeams || 0) - booked);
+/* 8단계: 예약·Hold 로 실제 점유된 팀 수를 티타임별로 모은다.
+   - 확정(confirmed) 예약 1건 = 1팀, TTL 이 살아 있는 Hold 1건 = 1팀.
+   - 취소·완료·노쇼 예약은 팀을 세지 않는다(취소 시 재고 복구와 같은 기준). */
+function inventoryFor(db, now = Date.now()) {
+  const map = new Map();
+  const bucket = id => {
+    const key = String(id);
+    if (!map.has(key)) map.set(key, { booked: 0, held: 0 });
+    return map.get(key);
+  };
+  (db.reservations || []).forEach(item => {
+    /* 취소만 재고를 비운다. 이용 완료·노쇼는 그 라운드의 팀을 그대로 점유한 것으로 본다. */
+    if (item && item.teeTimeId && ['confirmed', 'completed', 'no_show'].includes(item.status)) bucket(item.teeTimeId).booked += 1;
+  });
+  (db.bookingHolds || []).forEach(hold => {
+    if (!hold || hold.status !== 'active' || !hold.teeTimeId) return;
+    const expires = Date.parse(hold.expiresAt);
+    if (!Number.isFinite(expires) || expires <= now) return;
+    bucket(hold.teeTimeId).held += 1;
+  });
+  return map;
 }
 
-function teeTimeStatus(tee) {
+function countsFor(counts, tee) {
+  if (counts && typeof counts.get === 'function') return counts.get(String(tee.id)) || { booked: 0, held: 0 };
+  return { booked: 0, held: 0 };
+}
+
+function remainingTeams(tee, counts = null) {
+  const extra = countsFor(counts, tee);
+  const booked = Number(tee.bookedTeams || 0) + extra.booked;
+  const held = Number(tee.heldTeams || 0) + extra.held;
+  return Math.max(0, Number(tee.capacityTeams || 0) - booked - held);
+}
+
+function teeTimeStatus(tee, counts = null) {
   if (tee.status === 'closed') return 'closed';
   if (tee.status === 'stopped') return 'stopped';
-  if (remainingTeams(tee) < 1) return 'closed';
+  if (remainingTeams(tee, counts) < 1) return 'closed';
   return 'open';
 }
 
-function teeTimeForPartner(tee, rates) {
-  const status = teeTimeStatus(tee);
+function teeTimeForPartner(tee, rates, counts = null) {
+  const status = teeTimeStatus(tee, counts);
   const q = quote(rates, tee.date, tee.greenFee);
+  const extra = countsFor(counts, tee);
   return {
     ...tee,
-    remaining: remainingTeams(tee),
+    remaining: remainingTeams(tee, counts),
+    booked: Number(tee.bookedTeams || 0) + extra.booked,
+    held: Number(tee.heldTeams || 0) + extra.held,
+    activeHolds: extra.held,
     status,
     statusLabel: teeStatusLabel(status),
     closed: status !== 'open',
@@ -300,18 +375,20 @@ function teeTimeForPartner(tee, rates) {
 
 /* 예약·임시확보·연결 특가가 있는지 확인한다(삭제 차단 근거). */
 function teeTimeUsage(db, tee) {
-  const reservations = (db.reservations || []).filter(item => String(item.teeTimeId) === String(tee.id) && item.status !== 'cancelled');
-  const holds = (db.bookingHolds || []).filter(item => String(item.teeTimeId) === String(tee.id));
+  const counts = inventoryFor(db);
+  const reservations = (db.reservations || []).filter(item => String(item.teeTimeId) === String(tee.id) && ['confirmed', 'completed', 'no_show'].includes(item.status));
+  const holds = (db.bookingHolds || []).filter(item => String(item.teeTimeId) === String(tee.id) && item.status === 'active');
   const offers = (db.specialOffers || []).filter(item => String(item.teeTimeId) === String(tee.id) && !item.deletedAt);
-  const booked = Number(tee.bookedTeams || 0) + reservations.length;
-  const held = Number(tee.heldTeams || 0) + holds.length;
+  const extra = countsFor(counts, tee);
+  const booked = Number(tee.bookedTeams || 0) + extra.booked;
+  const held = Number(tee.heldTeams || 0) + extra.held;
   return {
     reservations: reservations.length,
     holds: holds.length,
     offers: offers.length,
     bookedTeams: booked,
     heldTeams: held,
-    inUse: booked > 0 || held > 0 || remainingTeams(tee) < Number(tee.capacityTeams || 0)
+    inUse: booked > 0 || held > 0 || remainingTeams(tee, counts) < Number(tee.capacityTeams || 0)
   };
 }
 
@@ -463,10 +540,11 @@ function offerForPartner(db, offer) {
 }
 
 /* --- 공개 카탈로그 --------------------------------------------------------- */
-function publicTeeTime(db, tee, rates, offers) {
-  const status = teeTimeStatus(tee);
+function publicTeeTime(db, tee, rates, offers, counts = null) {
+  const status = teeTimeStatus(tee, counts);
   const q = quote(rates, tee.date, tee.greenFee);
-  const remaining = remainingTeams(tee);
+  const remaining = remainingTeams(tee, counts);
+  const extra = countsFor(counts, tee);
   const activeOffer = (offers || []).find(offer => {
     if (String(offer.teeTimeId) !== String(tee.id)) return false;
     const sold = soldTeamsFor(db, offer.id);
@@ -484,6 +562,8 @@ function publicTeeTime(db, tee, rates, offers) {
     capacityTeams: Number(tee.capacityTeams),
     maxPlayers: Number(tee.maxPlayers),
     remaining,
+    booked: Number(tee.bookedTeams || 0) + extra.booked,
+    held: Number(tee.heldTeams || 0) + extra.held,
     greenFee: q.price,
     price: q.price,
     regular: q.price,
@@ -501,7 +581,7 @@ function publicTeeTime(db, tee, rates, offers) {
     version: tee.version,
     updatedAt: tee.updatedAt,
     dataMode: 'demo',
-    notice: '골프장이 서버에 등록한 시연 티타임입니다. 예약 재고 연동(잠금·차감)은 8단계 범위입니다.'
+    notice: '골프장이 서버에 등록한 티타임이며, 잔여 팀은 서버 예약·임시확보 기준으로 실시간 계산됩니다(시연).'
   };
 }
 
@@ -509,6 +589,7 @@ function publicCatalog(db, options = {}) {
   const date = options.date;
   const courseFilter = options.courseId ? String(options.courseId) : null;
   const teeTimes = (db.teeTimes || []).filter(item => item.date === date && (!courseFilter || String(item.courseId) === courseFilter));
+  const counts = inventoryFor(db);
   const courseIds = [...new Set(teeTimes.map(item => String(item.courseId)))];
   if (courseFilter && !courseIds.includes(courseFilter)) courseIds.push(courseFilter);
   const courses = courseIds.map(courseId => {
@@ -518,12 +599,13 @@ function publicCatalog(db, options = {}) {
     const times = teeTimes.filter(item => String(item.courseId) === courseId)
       .slice()
       .sort((a, b) => String(a.time).localeCompare(String(b.time)))
-      .map(item => publicTeeTime(db, item, rates, offers));
+      .map(item => publicTeeTime(db, item, rates, offers, counts));
     const priceSource = times[0] ? times[0].greenFee : rateForDate(rates, date);
     return {
       courseId,
       courseName: course ? course.name : null,
       rates: clientRates(rates, date, priceSource),
+      cancellationPolicy: { ...(defaultRates(course, courseId).cancellationPolicy), ...(rates.cancellationPolicy || {}) },
       teeTimes: times,
       offers: offers.map(item => offerForPublic(db, item))
     };
@@ -535,8 +617,13 @@ function publicCatalog(db, options = {}) {
     count: courses.reduce((sum, course) => sum + course.teeTimes.length, 0),
     courses,
     managedCourseIds: [...new Set((db.teeTimes || []).map(item => String(item.courseId)))],
-    inventoryLinked: false,
-    inventoryNote: '서버 티타임은 골프장이 등록한 운영 정보입니다. 고객 예약 재고(차감·잠금)는 아직 브라우저 시연 데이터이며 서버와 공유되지 않습니다(8단계).',
+    inventoryLinked: true,
+    inventoryNote: '잔여 팀은 서버 예약·임시확보(TTL) 기준으로 계산되며, 여러 기기·브라우저가 같은 재고를 봅니다. 실제 결제·실골프장 예약은 아닙니다(시연).',
+    inventory: {
+      source: 'server',
+      activeHolds: (db.bookingHolds || []).filter(hold => hold.status === 'active').length,
+      confirmedReservations: (db.reservations || []).filter(item => item.status === 'confirmed').length
+    },
     dataMode: 'demo',
     updatedAt: db.meta ? db.meta.updatedAt : null
   };
@@ -567,6 +654,7 @@ module.exports = {
   validateTeeTime,
   findTeeTime,
   findDuplicateTeeTime,
+  inventoryFor,
   remainingTeams,
   teeTimeStatus,
   teeTimeForPartner,

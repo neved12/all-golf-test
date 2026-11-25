@@ -1,10 +1,11 @@
-/* ALL:GOLF 서버 카탈로그 동기화 (7단계)
+/* ALL:GOLF 서버 카탈로그 동기화 (7단계 → 8단계 재고 연동)
    - 서버 연동 모드에서 골프장 담당자가 등록한 티타임·요금·특가를 날짜 단위로 받아 캐시한다.
    - 고객 앱은 캐시를 즉시 읽어 화면을 그리고(app.js 의 rawTimesFor), 변경이 오면
      `allgolf:catalogchange` 이벤트로 다시 그린다.
    - 서버가 없거나 정적 호스팅이면 아무 요청도 보내지 않고 기존 시연 데이터를 쓴다.
-   - 예약 재고(차감·잠금)는 아직 서버로 이전하지 않았다(8단계). 이 모듈은 "보여 주는 정보"만
-     서버에서 받아오고, 예약 수는 브라우저 시연 데이터로만 계산한다. */
+   - 8단계 서버는 잔여 팀(예약·Hold 반영)을 계산해 내려주고 inventoryLinked=true 로 표시한다.
+     이때 앱은 서버 잔여를 그대로 쓴다(브라우저 예약 수를 다시 빼지 않는다).
+   - `inventory.changed` / `reservations.changed` SSE 로 다른 기기의 예약도 즉시 반영한다. */
 (function () {
   'use strict';
 
@@ -62,6 +63,8 @@
         capacityTeams: Number(item.capacityTeams) || 0,
         maxPlayers: Number(item.maxPlayers) || 4,
         remaining: Math.max(0, Number(item.remaining) || 0),
+        booked: Math.max(0, Number(item.booked) || 0),
+        held: Math.max(0, Number(item.held) || 0),
         price: Number(item.price || item.greenFee || 0),
         regular: Number(item.regular || item.greenFee || 0),
         greenFee: Number(item.greenFee || item.price || 0),
@@ -73,7 +76,7 @@
         version: item.version,
         updatedAt: item.updatedAt || null,
         priceByPlayers: item.priceByPlayers || null,
-        notice: item.notice || '골프장이 서버에 등록한 시연 티타임입니다.'
+        notice: item.notice || '골프장이 서버에 등록한 티타임이며, 잔여 팀은 서버 예약 기준으로 계산됩니다.'
       }));
   }
 
@@ -175,6 +178,13 @@
     return (cache.managedCourseIds || []).includes(String(courseId));
   }
 
+  /* 서버가 예약 재고(잔여 팀)를 계산해 내려주는지. 8단계 서버면 true. */
+  function inventoryLinked() {
+    if (!isServer()) return false;
+    if (API && typeof API.reservationLinked === 'function' && API.reservationLinked()) return true;
+    return Object.values(cache.dates).some(entry => entry && entry.inventoryLinked === true);
+  }
+
   function cachedDates() {
     return Object.keys(cache.dates);
   }
@@ -195,6 +205,19 @@
         try { detail = JSON.parse(event.data); } catch { detail = null; }
         if (detail && detail.date && cache.dates[detail.date]) ensureDate(detail.date, { force: true });
         else refreshCachedDates();
+      });
+      /* 8단계: 예약·재고 변경도 즉시 반영한다(여러 기기·브라우저 공유). */
+      sse.addEventListener('inventory.changed', event => {
+        let detail = null;
+        try { detail = JSON.parse(event.data); } catch { detail = null; }
+        if (detail && detail.date && cache.dates[detail.date]) ensureDate(detail.date, { force: true });
+        else refreshCachedDates();
+      });
+      sse.addEventListener('reservations.changed', event => {
+        let detail = null;
+        try { detail = JSON.parse(event.data); } catch { detail = null; }
+        try { window.dispatchEvent(new CustomEvent('allgolf:serverreservationschange', { detail })); } catch { /* noop */ }
+        if (detail && detail.date && cache.dates[detail.date]) ensureDate(detail.date, { force: true });
       });
       sse.onerror = () => { try { sse.close(); } catch { /* noop */ } sse = null; };
     } catch { sse = null; }
@@ -232,6 +255,7 @@
     ratesFor,
     offersFor,
     isManaged,
+    inventoryLinked,
     applyPayload,
     cachedDates,
     refreshCachedDates,
@@ -245,7 +269,7 @@
         dates: cachedDates(),
         managedCourseIds: (cache.managedCourseIds || []).slice(),
         lastSyncAt,
-        inventoryLinked: false
+        inventoryLinked: inventoryLinked()
       };
     }
   };

@@ -63,6 +63,10 @@ module.exports = {
   /* 시연용 담당자 계정 자동 생성(선택). 꺼 두면 본사 관리자 화면/스크립트로만 만든다. */
   seedDemoPartnerAccounts: String(process.env.ALLGOLF_SEED_DEMO_PARTNER_ACCOUNTS || '').toLowerCase() === '1',
   demoPartnerPassword: String(process.env.DEMO_PARTNER_PASSWORD || '').trim() || 'allgolf-partner-2026',
+  /* 8단계: 임시확보(Hold) TTL 과 만료 정리 주기. 테스트에서는 1초처럼 짧게 줄 수 있다. */
+  holdTtlMs: Math.max(1, Number(process.env.ALLGOLF_HOLD_TTL_SECONDS || 300)) * 1000,
+  holdSweepMs: Math.max(1, Number(process.env.ALLGOLF_HOLD_SWEEP_SECONDS || 30)) * 1000,
+  maxHoldsPerSession: Math.max(1, Number(process.env.ALLGOLF_MAX_HOLDS || 3)),
   dbPath: process.env.ALLGOLF_DB_PATH
     ? path.resolve(rootDir, process.env.ALLGOLF_DB_PATH)
     : path.join(rootDir, 'server', 'data', 'db.json'),

@@ -69,7 +69,7 @@
 
   async function rawFetch(pathname, options) {
     const opts = options || {};
-    const headers = { Accept: 'application/json' };
+    const headers = { Accept: 'application/json', ...(opts.headers || {}) };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
     let controller = null;
@@ -140,6 +140,9 @@
           state.checkedAt = new Date().toISOString();
           state.connecting = false;
           setMode('server', '');
+          /* 모드가 이미 server(서버 주입 플래그)여서 setMode 가 조용했더라도,
+             health(8단계 예약 기능) 를 받은 시점을 모듈들에 알린다. */
+          emit();
           return state.mode;
         }
         state.online = false;
@@ -169,6 +172,29 @@
     return state.mode === 'server' ? '서버 연동' : '정적 시연';
   }
 
+  /* 서버가 8단계 예약·재고 기능을 제공하는지 확인(health 응답 기준). */
+  function health() {
+    return state.health || null;
+  }
+  function stage() {
+    return state.health && Number(state.health.stage) ? Number(state.health.stage) : 0;
+  }
+  function reservationLinked() {
+    return state.mode === 'server' && Boolean(state.health) && stage() >= 8
+      && Boolean(state.health.features && state.health.features.reservations === true);
+  }
+  async function refreshHealth() {
+    if (!state.base || isFile()) return state.health;
+    try {
+      const result = await rawFetch('/api/health', { timeoutMs: 2500 });
+      if (result.ok && result.data && result.data.ok === true) {
+        state.health = result.data;
+        emit();
+      }
+    } catch { /* 실패해도 기존 상태 유지 */ }
+    return state.health;
+  }
+
   function clearOverride() {
     try { localStorage.removeItem(STORAGE_BASE); } catch { /* noop */ }
     state.base = '';
@@ -187,6 +213,10 @@
     modeLabel,
     onModeChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     isServer() { return state.mode === 'server'; },
+    health,
+    stage,
+    reservationLinked,
+    refreshHealth,
     getToken,
     setToken,
     clearToken,
