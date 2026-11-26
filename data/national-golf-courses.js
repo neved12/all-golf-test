@@ -3,8 +3,8 @@ window.ALL_GOLF_NATIONAL_METADATA={
   "source": "https://www.data.go.kr/data/15118920/fileData.do",
   "sourceName": "문화체육관광부 전국 골프장 현황 + 행정안전부 생활_골프장 + 한국골프장경영협회 회원사 명부",
   "sourceAsOf": "2024-12-31",
-  "generatedAt": "2026-11-26T05:27:12.203Z",
-  "count": 511,
+  "generatedAt": "2026-11-26T05:37:04.347Z",
+  "count": 510,
   "sources": [
     {
       "url": "https://www.data.go.kr/data/15118920/fileData.do",
@@ -3669,7 +3669,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 9,
+    "licenseCount": 1,
     "licensedName": "88",
     "demoCatalog": false
   },
@@ -5943,49 +5943,6 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "lastVerified": "2026-11-24",
     "licenseCount": 2,
     "licensedName": "포천아도니스 C.C",
-    "demoCatalog": false
-  },
-  {
-    "id": "mcst-6f7767b3640c",
-    "name": "포천아도니스 대중골프장",
-    "region": "경기",
-    "city": "포천",
-    "address": "경기도 포천시 신북면 포천로 2499",
-    "operationType": "public",
-    "holes": 9,
-    "memberHoles": 0,
-    "publicHoles": 9,
-    "phone": null,
-    "operatingStatus": "active",
-    "verified": false,
-    "verification": {
-      "name": true,
-      "region": true,
-      "city": true,
-      "address": true,
-      "operationType": true,
-      "holes": true,
-      "phone": false,
-      "website": false
-    },
-    "officialWebsite": null,
-    "officialBookingUrl": null,
-    "courses": [],
-    "latitude": null,
-    "longitude": null,
-    "partner": false,
-    "bookingStatus": "info",
-    "bookingType": null,
-    "dataMode": "official_info",
-    "source": "https://www.data.go.kr/data/15118920/fileData.do",
-    "sources": [
-      "https://www.data.go.kr/data/15118920/fileData.do"
-    ],
-    "sourceName": "문화체육관광부 전국 골프장 현황",
-    "sourceAsOf": "2024-12-31",
-    "lastVerified": "2024-12-31",
-    "licenseCount": 0,
-    "licensedName": null,
     "demoCatalog": false
   },
   {
@@ -16810,7 +16767,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 2,
+    "licenseCount": 3,
     "licensedName": "보문골프클럽",
     "demoCatalog": false
   },
@@ -16956,7 +16913,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "holes": 9,
     "memberHoles": 0,
     "publicHoles": 9,
-    "phone": null,
+    "phone": "(054)740-0810",
     "operatingStatus": "active",
     "verified": false,
     "verification": {
@@ -16966,7 +16923,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "address": true,
       "operationType": true,
       "holes": true,
-      "phone": false,
+      "phone": true,
       "website": false
     },
     "officialWebsite": null,
@@ -16986,8 +16943,8 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 1,
-    "licensedName": "우리골프장",
+    "licenseCount": 2,
+    "licensedName": "우리골프클럽(일반 9홀)",
     "demoCatalog": false
   },
   {
@@ -17441,7 +17398,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "holes": 27,
     "memberHoles": 0,
     "publicHoles": 27,
-    "phone": "(054)420-0201",
+    "phone": "(054)420-0200",
     "operatingStatus": "active",
     "verified": false,
     "verification": {
@@ -17471,8 +17428,8 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 1,
-    "licensedName": "베네치아컨트리클럽",
+    "licenseCount": 2,
+    "licensedName": "포도컨트리클럽",
     "demoCatalog": false
   },
   {
@@ -17648,8 +17605,8 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "행정안전부 생활_골프장(골프장업 인허가)(명부 미등재 신규·누락)",
     "sourceAsOf": "2026-11-24",
     "lastVerified": "2026-11-24",
-    "licenseCount": 1,
-    "licensedName": "롯데스카이힐성주컨트리클럽",
+    "licenseCount": 2,
+    "licensedName": "롯데스카이힐성주컨트리클럽 / 헤븐랜드컨트리클럽",
     "demoCatalog": false
   },
   {
@@ -17824,7 +17781,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 1,
+    "licenseCount": 2,
     "licensedName": "오션비치CC",
     "demoCatalog": false
   },
@@ -18045,7 +18002,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
     "lastVerified": "2026-11-24",
-    "licenseCount": 1,
+    "licenseCount": 2,
     "licensedName": "한맥CC & 노블리아",
     "demoCatalog": false
   },
@@ -18655,13 +18612,14 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "dataMode": "official_info",
     "source": "https://www.data.go.kr/data/15118920/fileData.do",
     "sources": [
-      "https://www.data.go.kr/data/15118920/fileData.do"
+      "https://www.data.go.kr/data/15118920/fileData.do",
+      "https://www.data.go.kr/data/15045080/fileData.do"
     ],
-    "sourceName": "문화체육관광부 전국 골프장 현황",
+    "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
-    "lastVerified": "2024-12-31",
-    "licenseCount": 0,
-    "licensedName": null,
+    "lastVerified": "2026-11-24",
+    "licenseCount": 1,
+    "licensedName": "송라제니스컨트리클럽",
     "demoCatalog": false
   },
   {
@@ -18918,13 +18876,14 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "source": "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
     "sources": [
       "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
-      "https://www.data.go.kr/data/15118920/fileData.do"
+      "https://www.data.go.kr/data/15118920/fileData.do",
+      "https://www.data.go.kr/data/15045080/fileData.do"
     ],
-    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 문화체육관광부 전국 골프장 현황",
+    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
     "sourceAsOf": "2024-12-31",
-    "lastVerified": "2024-12-31",
-    "licenseCount": 0,
-    "licensedName": null,
+    "lastVerified": "2026-11-24",
+    "licenseCount": 1,
+    "licensedName": "고성Nobel컨트리클럽",
     "demoCatalog": false
   },
   {

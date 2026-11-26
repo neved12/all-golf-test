@@ -148,7 +148,7 @@ function readZipText(zipPath, suffix) {
 
 /* --------------------------------------------------- 이름·주소 정규화 */
 
-const GENERIC_WORDS = /컨트리클럽|콘트리클럽|카운트리클럽|컨츄리클럽|골프앤리조트|골프&리조트|골프리조트|골프클럽|골프장|골프|리조트|씨씨|c\.c\.|cc|g\.c\.|gc|club/gi;
+const GENERIC_WORDS = /컨트리클럽|콘트리클럽|카운트클럽|컨츄리클럽|골프앤리조트|골프&리조트|골프리조트|골프클럽|골프장|골프|리조트|씨씨|c\.?\s*c\.?|g\.?\s*c\.?|club/gi;
 const OPERATION_WORDS = /회원제|비회원제|비회원|대중제|대중형|대중|정규|일반|임대형/g;
 
 /* 이름에서 법인격·업종 표기·괄호 주석을 걷어내고 비교용 핵심어만 남긴다. */
@@ -161,8 +161,10 @@ function coreName(name) {
   value = value.replace(GENERIC_WORDS, ' ');
   value = value.replace(OPERATION_WORDS, ' ');
   value = value.toLowerCase();
-  /* 끝에 붙은 코스 번호(솔라고CC1 · 로얄링스2)는 이름이 아니라 구분 표기다. */
-  return value.replace(/[^0-9a-z가-힣]/g, '').replace(/\d+$/, '');
+  /* 끝에 붙은 코스 번호(솔라고CC1 · 로얄링스2)는 이름이 아니라 구분 표기다.
+     이름이 숫자뿐이면(예: '88골프장') 숫자를 남긴다. */
+  const squashed = value.replace(/[^0-9a-z가-힣]/g, '');
+  return /^\d+$/.test(squashed) ? squashed : squashed.replace(/\d+$/, '');
 }
 
 /* 표시용 이름: 끝에 붙은 운영형태 주석만 걷어낸다. */
@@ -626,8 +628,8 @@ function main() {
   for (const { row, rule } of pending) {
     if (rule && rule.action === 'merge') {
       const targetCore = coreName(rule.target);
-      const target = mastersWithCore.find(master => master.core === targetCore)
-        || mastersWithCore.find(master => master.core.includes(targetCore) || targetCore.includes(master.core));
+      const target = !targetCore || targetCore.length < 2 ? null : mastersWithCore.find(master => master.core === targetCore)
+        || (targetCore && targetCore.length >= 2 ? mastersWithCore.find(master => master.core.length >= 2 && (master.core.includes(targetCore) || targetCore.includes(master.core))) : null);
       if (target) {
         licenseByMaster.get(target).push(row);
         mergeNotes.push({ name: row.name, target: target.name, reason: rule.reason });
@@ -637,8 +639,24 @@ function main() {
     stillPending.push({ row, rule });
   }
   /* 남은 행끼리 같은 골프장인 경우(예: 성주 헤븐랜드 → 롯데스카이힐성주) 한 레코드로 합친다. */
-  const pendingGroups = new Map();
+  const pendingByCore = new Map();
+  for (const entry of stillPending) if (!pendingByCore.has(entry.row.core)) pendingByCore.set(entry.row.core, entry);
+  const absorbedInto = new Map();
+  const stillPending2 = [];
   for (const entry of stillPending) {
+    const rule = entry.rule;
+    const targetCore = rule && rule.action === 'merge' ? coreName(rule.target) : '';
+    const targetEntry = targetCore && targetCore.length >= 2 ? pendingByCore.get(targetCore) : null;
+    if (targetEntry && targetEntry !== entry) {
+      if (!absorbedInto.has(targetEntry.row)) absorbedInto.set(targetEntry.row, []);
+      absorbedInto.get(targetEntry.row).push(entry.row);
+      mergeNotes.push({ name: entry.row.name, target: targetEntry.row.name, reason: rule.reason });
+      continue;
+    }
+    stillPending2.push(entry);
+  }
+  const pendingGroups = new Map();
+  for (const entry of stillPending2) {
     const key = `${entry.row.core}|${entry.row.region}|${entry.row.city}`;
     if (!pendingGroups.has(key)) pendingGroups.set(key, []);
     pendingGroups.get(key).push(entry);
@@ -650,7 +668,7 @@ function main() {
     const aliases = group.slice(1).map(entry => entry.row);
     /* 그룹 안 어느 라이선스에든 정리 규칙이 있으면 그 규칙을 따른다. */
     const rule = group.map(entry => entry.rule).find(Boolean) || null;
-    const merged = aliases.reduce((acc, row) => { acc.push(row); return acc; }, [head.row]);
+    const merged = aliases.reduce((acc, row) => { acc.push(row); return acc; }, [head.row, ...(absorbedInto.get(head.row) || [])]);
     if (rule && rule.action === 'exclude') leftoverExcluded.push({ name: head.row.name, address: head.row.address, reason: rule.reason });
     else if ((rule && rule.action === 'include') || isCourseGolfFacility(head.row)) leftoverCandidates.push({ head: head.row, licenses: merged, rule });
     else leftoverExcluded.push({ name: head.row.name, address: head.row.address, reason: '코스 골프장 명칭·시설로 확인되지 않음(연습장·부속시설)' });
@@ -742,7 +760,7 @@ function main() {
       localRowsToMaster: localToMaster.size,
       mastersWithLicense: mastersWithCore.filter(master => licenseByMaster.get(master).length).length
     },
-    manualMerges: mergeNotes,
+    manualMerges: [...new Map(mergeNotes.map(note => [`${note.name}|${note.target}`, note])).values()],
     excludedLicenses,
     excludedClosed: closedMaster,
     leftoverCandidates: leftoverCandidates.map(candidate => ({ name: candidate.head.name, region: candidate.head.region, city: candidate.head.city, address: candidate.head.address })),

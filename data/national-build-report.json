@@ -2,7 +2,7 @@
   "input": {
     "legacyDemo": 68,
     "kgba": 203,
-    "mcstFacilities": 494,
+    "mcstFacilities": 493,
     "localTotal": 655,
     "localActive": 647,
     "localClosed": 8
@@ -10,8 +10,8 @@
   "matched": {
     "legacyToKgba": 27,
     "kgbaToMcst": 238,
-    "localRowsToMaster": 590,
-    "mastersWithLicense": 458
+    "localRowsToMaster": 592,
+    "mastersWithLicense": 460
   },
   "manualMerges": [
     {
@@ -51,18 +51,13 @@
     },
     {
       "name": "경주 보문컨트리(대중제)",
-      "target": "88",
+      "target": "보문G.C",
       "reason": "경주 보문단지 내 보문G.C의 대중제 라이선스"
     },
     {
       "name": "제이스C.C 시사이드",
       "target": "골프존카운티 감포",
       "reason": "2018년 11월 제이스CC 시사이드에서 골프존카운티 감포로 명칭 변경, 대표번호 054-777-9000 동일(매일신문 2018-12-18)"
-    },
-    {
-      "name": "우리골프클럽(일반 9홀)",
-      "target": "88",
-      "reason": "경주 양남면 동일 권역, 우리G.C의 일반 9홀 라이선스"
     },
     {
       "name": "코오롱가든골프장",
@@ -120,28 +115,18 @@
       "reason": "충주 신니면 동락길 207 동일 지번, 모카CC의 옛 라이선스"
     },
     {
-      "name": "포도컨트리클럽",
-      "target": "88",
-      "reason": "김천 구성면 남김천대로 2532 동일 지번, ㈜다옴 운영 포도C.C"
-    },
-    {
-      "name": "헤븐랜드컨트리클럽",
-      "target": "88",
-      "reason": "성주 초전면 소성2길 129 동일 지번, 롯데스카이힐성주CC의 옛 명칭"
-    },
-    {
       "name": "오션뷰 컨트리클럽(정규대중제27홀)",
-      "target": "88",
+      "target": "오션비치C.C",
       "reason": "오션비치CC와 같은 지번(강구면 삼사리)에 등록된 동일 골프장 라이선스"
     },
     {
       "name": "한맥컨트리클럽",
-      "target": "88",
+      "target": "한맥C.C&노블리아",
       "reason": "예천 호명읍 한맥골프장길 72 동일 주소"
     },
     {
       "name": "송라제니스컨트리클럽",
-      "target": "88",
+      "target": "포항C.C",
       "reason": "법인 (주)홍익레져산업, 포항C.C와 같은 단지"
     },
     {
@@ -151,7 +136,7 @@
     },
     {
       "name": "고성Nobel컨트리클럽",
-      "target": "88",
+      "target": "노벨",
       "reason": "고성군 회화면 동일 권역, 고성노벨컨트리클럽의 영문 표기 라이선스"
     },
     {
@@ -180,9 +165,9 @@
       "reason": "익산 웅포면 웅포리 동일 지번, 포세븐금강컨트리클럽으로 명칭 변경"
     },
     {
-      "name": "무주안성CC",
-      "target": "골프존카운티무주",
-      "reason": "2019년 7월 골프존카운티 무주로 운영 전환(골프존그룹 연혁)"
+      "name": "헤븐랜드컨트리클럽",
+      "target": "롯데스카이힐성주컨트리클럽",
+      "reason": "성주 초전면 소성2길 129 동일 지번, 롯데스카이힐성주CC의 옛 명칭"
     }
   ],
   "excludedLicenses": [
@@ -342,11 +327,11 @@
     }
   ],
   "leftoverExcluded": [],
-  "total": 511,
+  "total": 510,
   "demoCount": 68,
   "regionCounts": {
     "서울": 1,
-    "경기": 145,
+    "경기": 144,
     "인천": 14,
     "강원": 64,
     "충북": 39,
@@ -364,7 +349,7 @@
     "제주": 30
   },
   "operationCounts": {
-    "public": 339,
+    "public": 338,
     "membership": 112,
     "mixed": 46,
     "unknown": 14
@@ -372,7 +357,7 @@
   "missing": {
     "address": 1,
     "holes": 14,
-    "phone": 253,
+    "phone": 251,
     "operationType": 14
   }
 }

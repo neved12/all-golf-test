@@ -112,7 +112,7 @@ node tests/run-ui-smoke.js            # 화면 스크립트 스모크 55개 (par
 index.html, app.js, styles.css   사용자 앱
 partner/                         골프장 관리자
 admin/                           본사 관리자
-data/                            전국 골프장 마스터(511곳)·시연 재고, 제휴 저장소, API 클라이언트, 서버 카탈로그 동기화
+data/                            전국 골프장 마스터(510곳)·시연 재고, 제휴 저장소, API 클라이언트, 서버 카탈로그 동기화
 server/                          무의존성 Node API 서버 + 파일 DB
 tests/                           브라우저 없이 실행하는 시나리오 테스트
 ```
