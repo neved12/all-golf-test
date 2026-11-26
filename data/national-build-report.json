@@ -9,8 +9,8 @@
   },
   "matched": {
     "legacyToKgba": 27,
-    "kgbaToMcst": 238,
-    "localRowsToMaster": 592,
+    "kgbaToMcst": 239,
+    "localRowsToMaster": 591,
     "mastersWithLicense": 460
   },
   "manualMerges": [
@@ -88,6 +88,11 @@
       "name": "한미르대덕밸리 컨트리클럽",
       "target": "금실대덕밸리CC",
       "reason": "법인 금실레져산업(주), 대전 유성구 용산동 676 동일 지번"
+    },
+    {
+      "name": "대덕복지센터",
+      "target": "사이언스대덕 CC",
+      "reason": "대전 유성구 유성대로1689번길 69 동일 단지, 과학기술인공제회 대덕복지센터가 운영하는 사이언스대덕골프장"
     },
     {
       "name": "루트52CC",
@@ -327,7 +332,7 @@
     }
   ],
   "leftoverExcluded": [],
-  "total": 510,
+  "total": 509,
   "demoCount": 68,
   "regionCounts": {
     "서울": 1,
@@ -336,7 +341,7 @@
     "강원": 64,
     "충북": 39,
     "충남": 27,
-    "대전": 4,
+    "대전": 3,
     "세종": 3,
     "전북": 26,
     "전남": 42,
@@ -349,15 +354,15 @@
     "제주": 30
   },
   "operationCounts": {
-    "public": 338,
+    "public": 339,
     "membership": 112,
     "mixed": 46,
-    "unknown": 14
+    "unknown": 12
   },
   "missing": {
-    "address": 1,
-    "holes": 14,
-    "phone": 251,
-    "operationType": 14
+    "address": 0,
+    "holes": 12,
+    "phone": 248,
+    "operationType": 12
   }
 }

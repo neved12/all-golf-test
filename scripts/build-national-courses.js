@@ -32,6 +32,7 @@ const KGBA_PATH = path.join(SRC, 'kgba-2025-records.json');
 const MCST_PATH = path.join(SRC, 'mcst-national-golf-courses-20241231.zip');
 const LOCAL_PATH = path.join(SRC, 'localdata-golf-courses-20261126.csv');
 const LEGACY_PATH = path.join(SRC, 'legacy-demo-courses.json');
+const LEGACY_ENRICH_PATH = path.join(SRC, 'legacy-demo-enrichment.json');
 const MAP_PATH = path.join(SRC, 'localdata-course-map.json');
 const OUTPUT_PATH = path.join(ROOT, 'data', 'national-golf-courses.js');
 const REPORT_PATH = path.join(ROOT, 'data', 'national-build-report.json');
@@ -253,6 +254,10 @@ function readKgba() {
       memberHoles: Number.isFinite(record.memberHoles) ? record.memberHoles : null,
       publicHoles: Number.isFinite(record.publicHoles) ? record.publicHoles : null,
       phone: record.phone || null,
+      officialWebsite: record.officialWebsite || null,
+      extraSources: record.sources || [],
+      extraSourceName: record.sourceName || null,
+      extraSourceAsOf: record.sourceAsOf || null,
       roadKey: parsed.roadKey,
       dong: dongTokens(record.address || '')
     };
@@ -467,7 +472,7 @@ function buildRecord(seed) {
     operatingStatus: seed.operatingStatus || 'active',
     verified: false,
     verification: null,
-    officialWebsite: null,
+    officialWebsite: seed.officialWebsite || null,
     officialBookingUrl: null,
     courses: [],
     latitude: null,
@@ -495,7 +500,11 @@ function buildRecord(seed) {
 function readLegacy() {
   if (!fs.existsSync(LEGACY_PATH)) throw new Error(`시연 예약 골프장 명부가 없습니다: ${LEGACY_PATH}`);
   const data = JSON.parse(fs.readFileSync(LEGACY_PATH, 'utf8'));
-  return data.records.map(record => {
+  /* 공식 출처에 값이 없던 시연 골프장은 별도 확인 자료로 보완한다. */
+  const enrich = fs.existsSync(LEGACY_ENRICH_PATH) ? JSON.parse(fs.readFileSync(LEGACY_ENRICH_PATH, 'utf8')).records || [] : [];
+  const enrichById = new Map(enrich.map(item => [item.id, item]));
+  return data.records.map(raw => {
+    const record = { ...raw, ...(enrichById.get(raw.id) || {}) };
     const parsed = parseAddress(record.address || '');
     return {
       layer: 'legacy',
@@ -509,6 +518,10 @@ function readLegacy() {
       memberHoles: Number.isFinite(record.memberHoles) ? record.memberHoles : null,
       publicHoles: Number.isFinite(record.publicHoles) ? record.publicHoles : null,
       phone: record.phone || null,
+      officialWebsite: record.officialWebsite || null,
+      extraSources: record.sources || [],
+      extraSourceName: record.sourceName || null,
+      extraSourceAsOf: record.sourceAsOf || null,
       roadKey: parsed.roadKey,
       dong: dongTokens(record.address || '')
     };
@@ -556,6 +569,10 @@ function main() {
       memberHoles: item.memberHoles ?? kgbaItem?.memberHoles ?? null,
       publicHoles: item.publicHoles ?? kgbaItem?.publicHoles ?? null,
       phone: item.phone || kgbaItem?.phone || null,
+      officialWebsite: item.officialWebsite || null,
+      extraSources: item.extraSources || [],
+      extraSourceName: item.extraSourceName || null,
+      extraSourceAsOf: item.extraSourceAsOf || null,
       legacy: item,
       kgba: kgbaItem,
       mcst: mcstItem
@@ -705,6 +722,8 @@ function main() {
     if (master.kgba) { sources.push(SOURCE.kgba.url); names.push(SOURCE.kgba.name); }
     if (master.mcst) { sources.push(SOURCE.mcst.url); names.push(SOURCE.mcst.name); }
     if (licenses.length) { sources.push(SOURCE.localdata.url); names.push(SOURCE.localdata.name); }
+    for (const extra of master.extraSources || []) sources.push(extra);
+    if (master.extraSourceName) names.push(master.extraSourceName);
     const uniqueNames = [...new Set(names)];
     records.push(buildRecord({
       id: uniqueId(master.id),
@@ -717,12 +736,13 @@ function main() {
       memberHoles: master.memberHoles,
       publicHoles: master.publicHoles,
       phone: master.phone || (license ? license.phone : null),
+      officialWebsite: master.officialWebsite || null,
       operatingStatus: 'active',
       source: master.kgba || master.legacy ? SOURCE.kgba.url : SOURCE.mcst.url,
       sources: [...new Set(sources)],
       sourceName: uniqueNames.join(' · '),
       sourceAsOf: master.mcst ? SOURCE.mcst.asOf : SOURCE.kgba.asOf,
-      lastVerified: licenses.length ? SOURCE.localdata.asOf : master.mcst ? SOURCE.mcst.asOf : SOURCE.kgba.asOf,
+      lastVerified: master.extraSourceAsOf || (licenses.length ? SOURCE.localdata.asOf : master.mcst ? SOURCE.mcst.asOf : SOURCE.kgba.asOf),
       licenseCount: licenses.length,
       licensedName: license ? license.name : null,
       demoCatalog: Boolean(master.legacy)

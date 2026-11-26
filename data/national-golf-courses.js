@@ -3,8 +3,8 @@ window.ALL_GOLF_NATIONAL_METADATA={
   "source": "https://www.data.go.kr/data/15118920/fileData.do",
   "sourceName": "문화체육관광부 전국 골프장 현황 + 행정안전부 생활_골프장 + 한국골프장경영협회 회원사 명부",
   "sourceAsOf": "2024-12-31",
-  "generatedAt": "2026-11-26T05:37:04.347Z",
-  "count": 510,
+  "generatedAt": "2026-11-26T05:42:01.472Z",
+  "count": 509,
   "sources": [
     {
       "url": "https://www.data.go.kr/data/15118920/fileData.do",
@@ -9941,9 +9941,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "http://www.daehocc.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10067,7 +10067,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(043)740-0000",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -10076,9 +10076,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://illitegolfnresort.co.kr/golf/main",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10112,7 +10112,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(043)882-1600",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -10121,9 +10121,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "http://www.gamgokcc.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10166,9 +10166,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.rainbowhills.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10247,7 +10247,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(043)881-5307",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -10256,9 +10256,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.sunvalley.co.kr/iljuk/golf/intro",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10481,9 +10481,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.ecolian.or.kr/common/main.do?coDiv=103",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10571,9 +10571,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://belleforetresort.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10661,9 +10661,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.golfzoncounty.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10841,9 +10841,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.gold-9.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10877,7 +10877,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 0,
     "phone": "(043)212-7111~4",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -10886,9 +10886,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.grandgolf.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -10931,9 +10931,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.onetheclub.com/tgv/main",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11021,9 +11021,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.ochangedincc.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11102,7 +11102,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(043)850-8600",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -11111,9 +11111,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "http://www.basecc.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11156,9 +11156,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://dyhills.basecc.co.kr:6443/Main/Main.aspx",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11201,9 +11201,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.dongchongc.co.kr:442/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11246,9 +11246,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.mokacc.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11336,9 +11336,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://starcc.net/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11381,9 +11381,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.cygnuscc.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11417,7 +11417,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(043)841-9000",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -11426,9 +11426,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.alldaygolf.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -11819,7 +11819,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(041)851-6300",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -11828,9 +11828,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.princessgc.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -12008,9 +12008,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.panaceagc.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -12538,7 +12538,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(041)623-5500",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -12547,9 +12547,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.maronnewday.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -12666,12 +12666,12 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "name": "예미지 CC",
     "region": "충남",
     "city": "청양",
-    "address": "충청남도 청양군 대치면 주정리 44번지 1호",
-    "operationType": "unknown",
-    "holes": null,
+    "address": "충남 청양군 대치면 주전로 268",
+    "operationType": "public",
+    "holes": 27,
     "memberHoles": null,
     "publicHoles": null,
-    "phone": null,
+    "phone": "(041)943-8777",
     "operatingStatus": "active",
     "verified": false,
     "verification": {
@@ -12679,9 +12679,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "region": true,
       "city": true,
       "address": true,
-      "operationType": false,
-      "holes": false,
-      "phone": false,
+      "operationType": true,
+      "holes": true,
+      "phone": true,
       "website": false
     },
     "officialWebsite": null,
@@ -12696,11 +12696,13 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "source": "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
     "sources": [
       "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
-      "https://www.data.go.kr/data/15045080/fileData.do"
+      "https://www.data.go.kr/data/15045080/fileData.do",
+      "https://www.daejonilbo.com/news/articleView.html?idxno=2271314",
+      "https://www.munhwa.com/article/11585026"
     ],
-    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
+    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 행정안전부 생활_골프장(골프장업 인허가) · 예미지컨트리클럽 그랜드 오픈 보도(대전일보 2026-04-25)",
     "sourceAsOf": "2024-12-08",
-    "lastVerified": "2026-11-24",
+    "lastVerified": "2026-04-25",
     "licenseCount": 1,
     "licensedName": "예미지CC",
     "demoCatalog": true
@@ -12930,18 +12932,18 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "demoCatalog": false
   },
   {
-    "id": "mcst-60ec68d29574",
-    "name": "대덕복지센터",
+    "id": "dj-science-daedeok",
+    "name": "사이언스대덕 CC",
     "region": "대전",
     "city": "유성",
-    "address": "대전 유성구 유성대로 1689번길 69(전민동 463번지)",
+    "address": "대전광역시 유성구 유성대로1689번길 69",
     "operationType": "public",
     "holes": 9,
-    "memberHoles": 0,
-    "publicHoles": 9,
-    "phone": null,
+    "memberHoles": null,
+    "publicHoles": null,
+    "phone": "(042)865-3000",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -12949,54 +12951,10 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "address": true,
       "operationType": true,
       "holes": true,
-      "phone": false,
-      "website": false
+      "phone": true,
+      "website": true
     },
-    "officialWebsite": null,
-    "officialBookingUrl": null,
-    "courses": [],
-    "latitude": null,
-    "longitude": null,
-    "partner": false,
-    "bookingStatus": "info",
-    "bookingType": null,
-    "dataMode": "official_info",
-    "source": "https://www.data.go.kr/data/15118920/fileData.do",
-    "sources": [
-      "https://www.data.go.kr/data/15118920/fileData.do",
-      "https://www.data.go.kr/data/15045080/fileData.do"
-    ],
-    "sourceName": "문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가)",
-    "sourceAsOf": "2024-12-31",
-    "lastVerified": "2026-11-24",
-    "licenseCount": 1,
-    "licensedName": "대덕복지센터",
-    "demoCatalog": false
-  },
-  {
-    "id": "dj-science-daedeok",
-    "name": "사이언스대덕 CC",
-    "region": "대전",
-    "city": "유성",
-    "address": null,
-    "operationType": "unknown",
-    "holes": null,
-    "memberHoles": null,
-    "publicHoles": null,
-    "phone": null,
-    "operatingStatus": "active",
-    "verified": false,
-    "verification": {
-      "name": true,
-      "region": true,
-      "city": true,
-      "address": false,
-      "operationType": false,
-      "holes": false,
-      "phone": false,
-      "website": false
-    },
-    "officialWebsite": null,
+    "officialWebsite": "http://www.ddgolf.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -13007,13 +12965,17 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "dataMode": "official_info",
     "source": "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
     "sources": [
-      "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf"
+      "https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf",
+      "https://www.data.go.kr/data/15118920/fileData.do",
+      "https://www.data.go.kr/data/15045080/fileData.do",
+      "http://www.ddgolf.co.kr/",
+      "https://golfmap.kr/courses/gc-4906278997cc"
     ],
-    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황",
-    "sourceAsOf": "2024-12-08",
-    "lastVerified": "2024-12-08",
-    "licenseCount": 0,
-    "licensedName": null,
+    "sourceName": "한국골프장경영협회 2025 가이드북 회원사 현황 · 문화체육관광부 전국 골프장 현황 · 행정안전부 생활_골프장(골프장업 인허가) · 사이언스대덕골프장 공식 홈페이지 · 골프맵 시설 정보",
+    "sourceAsOf": "2024-12-31",
+    "lastVerified": "2026-06-18",
+    "licenseCount": 1,
+    "licensedName": "대덕복지센터",
     "demoCatalog": true
   },
   {
@@ -13028,7 +12990,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 0,
     "phone": "(042)822-7103",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -13037,9 +12999,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://yscc.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -13073,7 +13035,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 18,
     "phone": "(044)861-5678",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -13082,9 +13044,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.sejongcc.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -13127,9 +13089,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": false,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "https://www.sjraycastle.com/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,
@@ -13163,7 +13125,7 @@ window.ALL_GOLF_NATIONAL_COURSES=[
     "publicHoles": 0,
     "phone": "(044)862-4004",
     "operatingStatus": "active",
-    "verified": false,
+    "verified": true,
     "verification": {
       "name": true,
       "region": true,
@@ -13172,9 +13134,9 @@ window.ALL_GOLF_NATIONAL_COURSES=[
       "operationType": true,
       "holes": true,
       "phone": true,
-      "website": false
+      "website": true
     },
-    "officialWebsite": null,
+    "officialWebsite": "http://www.sejongemerson.co.kr/",
     "officialBookingUrl": null,
     "courses": [],
     "latitude": null,

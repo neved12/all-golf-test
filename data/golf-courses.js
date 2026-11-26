@@ -80,9 +80,21 @@ const mergedLocal=localCourses.map(local=>{
   });
   if(!match)return local;
   usedNationalIds.add(match.id);
-  return {...match,...local,address:local.address||match.address,phone:match.phone||null,memberHoles:match.memberHoles??null,publicHoles:match.publicHoles??null,
+  /* 시연 골프장 값이 비어 있으면 전국 공식 데이터 값으로 채운다(홀수·운영형태·전화·주소). */
+  const operationType=local.operationType&&local.operationType!=='unknown'?local.operationType:match.operationType;
+  const holes=Number.isFinite(local.holes)?local.holes:match.holes;
+  const merged={...match,...local,address:local.address||match.address,phone:local.phone||match.phone,
+    operationType,type:operationType==='membership'?'member':operationType,membershipType:operationType==='membership'?'member':operationType==='unknown'?null:operationType,
+    holes,memberHoles:Number.isFinite(local.memberHoles)?local.memberHoles:match.memberHoles,publicHoles:Number.isFinite(local.publicHoles)?local.publicHoles:match.publicHoles,
+    courses:(local.courses&&local.courses.length)?local.courses:match.courses,website:local.website||match.website||null,officialWebsite:local.officialWebsite||match.officialWebsite||null,
     sources:[...new Set([...(local.sources||[]),...(match.sources||[])])],sourceName:match.sourceName,sourceAsOf:match.sourceAsOf,
-    verification:{...match.verification,...local.verification},bookingStatus:'demo',bookingType:'demo',dataMode:'demo'};
+    operatingStatus:local.operatingStatus==='unknown'?(match.operatingStatus||'active'):local.operatingStatus,
+    source:local.source||match.source,lastVerified:match.lastVerified||local.lastVerified,
+    bookingStatus:'demo',bookingType:'demo',dataMode:'demo'};
+  /* 보완된 값 기준으로 검증 상태를 다시 계산한다. */
+  merged.verification={name:Boolean(merged.name),region:Boolean(merged.region),city:Boolean(merged.city),address:Boolean(merged.address),operationType:merged.operationType!=='unknown',holes:Number.isFinite(merged.holes),phone:Boolean(merged.phone),website:Boolean(merged.officialWebsite||merged.website)};
+  merged.verified=Object.values(merged.verification).every(Boolean);
+  return merged;
 });
 const nationalOnly=nationalCourses.filter(course=>!usedNationalIds.has(course.id)).map(course=>({...course,area:course.city,type:course.operationType==='membership'?'member':course.operationType,membershipType:course.operationType==='membership'?'member':course.operationType,website:course.officialWebsite||null,greenFee:null,verifiedGreenFee:null,cartFee:null,caddieFee:null,description:'',amenities:[],cancellationPolicy:null}));
 window.ALL_GOLF_COURSES=[...mergedLocal,...nationalOnly];

@@ -1,0 +1,26 @@
+{
+  "note": "기존 시연 예약 68곳 중 공식 출처(문체부·행안부·협회)에 값이 없던 골프장의 확인된 정보. 골프장 공식 홈페이지·지자체 보도로 확인한 값만 넣는다.",
+  "records": [
+    {
+      "id": "dj-science-daedeok",
+      "address": "대전광역시 유성구 유성대로1689번길 69",
+      "operationType": "public",
+      "holes": 9,
+      "phone": "(042)865-3000",
+      "officialWebsite": "http://www.ddgolf.co.kr/",
+      "sourceName": "사이언스대덕골프장 공식 홈페이지 · 골프맵 시설 정보",
+      "sources": ["http://www.ddgolf.co.kr/", "https://golfmap.kr/courses/gc-4906278997cc"],
+      "sourceAsOf": "2026-06-18"
+    },
+    {
+      "id": "cn-yemiji",
+      "address": "충남 청양군 대치면 주전로 268",
+      "operationType": "public",
+      "holes": 27,
+      "phone": "(041)943-8777",
+      "sourceName": "예미지컨트리클럽 그랜드 오픈 보도(대전일보 2026-04-25)",
+      "sources": ["https://www.daejonilbo.com/news/articleView.html?idxno=2271314", "https://www.munhwa.com/article/11585026"],
+      "sourceAsOf": "2026-04-25"
+    }
+  ]
+}
