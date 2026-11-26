@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* ALL:GOLF 7단계 서버
+/* ALL:GOLF 9단계 서버
    사용법: node server/index.js   (= npm start)
    - 외부 패키지·네이티브 빌드 없이 Node.js 내장 모듈만 사용한다(Windows 무설치).
    - 같은 주소에서 정적 앱(/, /partner/, /admin/)과 /api 를 함께 제공한다.
@@ -147,7 +147,7 @@ function start() {
     const address = server.address();
     const port = address && typeof address === 'object' ? address.port : config.port;
     console.log('');
-    console.log('  ALL:GOLF 8단계 서버 (시연용 · 실제 결제/예약 아님)');
+    console.log('  ALL:GOLF 9단계 서버 (시연용 · 실제 결제/정산 이체 아님)');
     console.log(`  사용자 앱      http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/`);
     console.log(`  골프장 관리자  http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/partner/`);
     console.log(`  본사 관리자    http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${port}/admin/`);

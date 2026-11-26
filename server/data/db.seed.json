@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "meta": {
     "createdAt": null,
     "updatedAt": null,
@@ -14,5 +14,8 @@
   "specialOffers": [],
   "reservations": [],
   "bookingHolds": [],
-  "auditLogs": []
+  "auditLogs": [],
+  "commissionRates": {},
+  "settlements": [],
+  "notificationLogs": []
 }

@@ -146,17 +146,19 @@ async function main() {
     server = await startServer(env);
     const health = await waitForHealth(base);
     ok('서버 기동 · /api/health 200', health && health.ok === true);
-    eq('8단계 서버 표시', health.stage, 8);
+    /* 9단계에서 health.stage 가 9 로 올라가도 8단계 예약 기능이 그대로 있음을 확인한다. */
+    ok('8단계 서버 표시(9단계 이상)', Number(health.stage) >= 8, health.stage);
     ok('예약·Hold·멱등·환불 기능 표시', health.features && health.features.reservations === true
       && health.features.holds === true && health.features.idempotency === true && health.features.refunds === true);
     eq('재고 연동 표시', health.features.inventoryLinked, true);
     ok('Hold TTL 공개', health.hold && Number(health.hold.ttlSec) === 3, JSON.stringify(health.hold));
-    eq('DB 스키마 3', health.db.schemaVersion, 3);
+    /* 9단계에서 스키마가 v4 로 올라갔으므로 3 이상인지 확인한다. */
+    ok('DB 스키마 3 이상(9단계 v4)', Number(health.db.schemaVersion) >= 3, health.db.schemaVersion);
     eq('초기 예약 0·Hold 0', `${health.db.reservations}/${health.db.activeHolds}`, '0/0');
 
     const home = await call('GET', '/');
     ok('고객 앱에 예약 클라이언트 포함', home.text.includes('data/server-reservations.js'));
-    ok('정적 자산 8단계 캐시 버전', home.text.includes('v=20261125-stage8'));
+    ok('정적 자산 최신 캐시 버전', home.text.includes('v=20261126-stage9'), 'v=20261126-stage9');
 
     /* 2. 준비: 골프장 A/B 승인·계정·티타임 -------------------------------- */
     section('8단계 · 준비: 골프장 A/B 승인과 티타임');
@@ -467,7 +469,7 @@ async function main() {
     /* 13. DB 버전 3 과 정적 모드 ------------------------------------------- */
     section('8단계 · DB 스키마와 정적 모드 폴백');
     const rawDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-    eq('DB 버전 3', rawDb.version, 3);
+    ok('DB 버전 3 이상', Number(rawDb.version) >= 3, rawDb.version);
     ok('예약·Hold 컬렉션 저장', Array.isArray(rawDb.reservations) && rawDb.reservations.length >= 5 && Array.isArray(rawDb.bookingHolds));
     ok('DB 에 평문 개인정보 노출 최소화(세션 해시 없음)', !JSON.stringify(rawDb.reservations).includes('idempotencyKey'));
     ok('예약 번호 순번 보존', Object.keys(rawDb.meta.sequences || {}).some(k => k.startsWith('rsv:')));
@@ -510,7 +512,7 @@ async function main() {
     fs.writeFileSync(dbPath, `${JSON.stringify(legacy, null, 2)}\n`);
     server = await startServer(env);
     const legacyHealth = await waitForHealth(base);
-    eq('v2 DB 를 v3 로 승격', legacyHealth.db.schemaVersion, 3);
+    ok('v2 DB 를 v4 로 승격(3 이상)', Number(legacyHealth.db.schemaVersion) >= 3, legacyHealth.db.schemaVersion);
     ok('v2 데이터(골프장·티타임) 유지', legacyHealth.db.approvedCourses >= 2 && legacyHealth.db.teeTimes >= 6, JSON.stringify(legacyHealth.db));
     eq('v2 DB 에 예약 컬렉션 자동 생성', legacyHealth.db.reservations, 0);
     const legacyLogin = await call('POST', '/api/partner/login', { body: { email: 'owner8a@example.com', password: 'Stage8Pass1' } });

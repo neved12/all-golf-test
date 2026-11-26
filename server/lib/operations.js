@@ -43,8 +43,8 @@ function sessionForTime(time) {
   return '3부';
 }
 
-function todayKst() {
-  return domain.kstStamp().date;
+function todayKst(now = new Date()) {
+  return domain.kstStamp(now).date;
 }
 
 function addDaysIso(date, days) {
