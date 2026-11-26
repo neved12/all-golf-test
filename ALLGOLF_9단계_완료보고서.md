@@ -5,8 +5,10 @@
 - 배포: <https://neved12.github.io/all-golf-test/>
 - 9단계 코드 PR: [#17](https://github.com/neved12/all-golf-test/pull/17) → `main` 병합 커밋 `047e48e`
 - 배포 확인: GitHub Pages 빌드 `built` (커밋 `047e48e`, 2026-11-26 04:54:46Z), `/`, `/admin/`, `/partner/`, 정적 자산 모두 HTTP 200
-- 통합검증 중 발견한 모바일 360px 가로 넘침 수정: 커밋 `005e414` (배포 `built`, 05:02:32Z)
-- 버전: `package.json` `9.0.0`, 정적 자산 캐시 `?v=20261126-stage9`, DB 스키마 **v4**
+- 통합검증 중 발견한 모바일 360px 찜 목록 가로 넘침 수정
+  - 1차 `005e414` (04:54 이후 배포) → 재측정에서 미해결 확인
+  - 2차 `7aacb4f` (05:06:42Z 배포) → 재측정에서 **전 화면 통과 확인**
+- 버전: `package.json` `9.0.0`, 정적 자산 캐시 `?v=20261126-stage9` (9단계 최초 배포) → 수정 재배포 시 `?v=20261126-stage9b`, DB 스키마 **v4**
 
 ---
 
@@ -293,10 +295,10 @@ DRAFT(작성 중) → PENDING(확인 대기) → CONFIRMED(확정) → PAID(지�
 | 항목 | 결과 |
 |---|---|
 | PR | [#17](https://github.com/neved12/all-golf-test/pull/17) 생성 → `main` 병합 |
-| 병합 커밋 | `047e48e` (9단계 기능), `005e414` (360px 넘침 수정) |
-| Pages 빌드 | `status: built` (047e48e: 04:54:46Z, 005e414: 05:02:32Z) |
+| 병합 커밋 | `047e48e` (9단계 기능), `005e414`·`7aacb4f` (360px 넘침 수정) |
+| Pages 빌드 | `status: built` (047e48e: 04:54:46Z, 005e414: 05:02:32Z, 7aacb4f: 05:06:42Z) |
 | HTTP 확인 | `/` 200, `/admin/` 200, `/partner/` 200, `/admin/admin.js` 200, `/data/api-client.js` 200 |
-| 캐시 버전 | 배포 HTML에서 `?v=20261126-stage9` 확인 |
+| 캐시 버전 | 최초 배포 `?v=20261126-stage9`, 수정 배포 `?v=20261126-stage9b` 확인 |
 | 런타임 오류 | admin 운영 통계·정산 화면 이동/조작 중 `window.onerror`·`unhandledrejection` 0건, 실패 리소스 0건 |
 | 브라우저 확인 | ① admin 운영 통계(정적 폴백) ② admin 정산·수수료(정적 폴백) ③ 고객 앱 홈·검색·상세·예약 완료·내 예약·대기 ④ admin 제휴 신청·백업 ⑤ partner 제휴 신청 |
 
@@ -322,6 +324,7 @@ DRAFT(작성 중) → PENDING(확인 대기) → CONFIRMED(확정) → PAID(지�
 | `10-admin-applications.png` | 제휴 신청 관리(승인 완료 2건) |
 | `11-admin-backup-restore.png` | 시연 데이터 백업·복원(개인정보 제외 안내) |
 | `12-partner-apply.png` | 골프장 제휴 신청 화면 |
+| `13-responsive-360-390-430.png` | 360/390/430 반응형 점검 결과(수정 후, 전 조합 통과) |
 
 부가: `downloads/ALLGOLF-AG-261126-17219.ics` — 예약 완료 화면에서 내려받은 일정 파일(정적 시연 예약 1건).
 
@@ -355,7 +358,7 @@ npm start            # = node server/index.js  (npm install 불필요)
 
 - 신규: `server/lib/analytics.js`, `tests/run-stage9-scenarios.js`
 - 서버: `server/routes/api.js`(9단계 API·알림 기록·health), `server/lib/db.js`(v4), `server/lib/operations.js`(todayKst 인자), `server/index.js`(배너), `server/data/db.seed.json`, `server/data/README.md`
-- 화면: `admin/admin.js`(통계·정산·수수료 페이지), `partner/partner.js`(정산·알림), `styles.css`(360px 넘침 수정), `index.html`·`admin/index.html`·`partner/index.html`(캐시 버전)
+- 화면: `admin/admin.js`(통계·정산·수수료 페이지), `partner/partner.js`(정산·알림), `styles.css`(360px 넘침 수정 2회), `index.html`·`admin/index.html`·`partner/index.html`(캐시 버전 stage9 → stage9b)
 - 문서·설정: `README.md`, `tests/README.md`, `package.json`(9.0.0, test:stage9)
 - 테스트 조정: `tests/run-stage7-scenarios.js`, `tests/run-stage8-scenarios.js`, `tests/run-ui-smoke.js`(+22건)
 

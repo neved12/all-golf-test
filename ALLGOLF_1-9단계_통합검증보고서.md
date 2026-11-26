@@ -148,10 +148,10 @@
 ### 2.1 모바일 360px에서 '찜한 골프장' 카드 가로 넘침
 
 - **발견**: GitHub Pages의 `tests/responsive-check.html`을 실브라우저로 실행한 결과, 7개 화면 × 3폭(360/390/430) 중 **`page=favorites`의 360px에서만 `scrollWidth 371 > 360` (넘침 O)** 가 나타났습니다. 390/430을 포함한 나머지 20개 조합은 모두 정상.
-- **원인**: 찜 카드의 액션 버튼 두 개(`상세보기`·`빈자리 알림`)가 `white-space: nowrap` + `width: 100%` 상태로 grid 열의 min-content를 밀어 올려, 카드가 컨테이너(330px)보다 넓은 356px로 확장되고 오른쪽으로 11px 넘쳤습니다.
-- **수정**: `styles.css`의 `.card-actions`에 `min-width:0`, 자식 버튼에 `min-width:0; white-space:normal; word-break:keep-all`을 추가(커밋 `005e414`).
-- **재확인**: 수정 배포 후 같은 점검 페이지에서 `page=favorites` 360px가 **넘침 X**로 바뀐 것을 확인했습니다(3절 표).
-- 다른 화면에는 같은 패턴의 넘침이 없었습니다.
+- **원인**: 찜 카드의 액션 버튼 두 개(`상세보기`·`빈자리 알림`)를 담은 grid와 카드가 `min-width:auto`(내용 기반 최소 폭)로 커져, 카드가 컨테이너(330px)보다 넓은 356px가 되었고 오른쪽으로 11px 넘쳤습니다.
+- **수정 1차**(`005e414`): `.card-actions`와 자식 버튼에 `min-width:0`, `white-space:normal` 추가. 그러나 재측정에서 카드가 여전히 356px로 계산되어 **미해결**을 확인했습니다(자식이 아닌 카드·목록 컨테이너의 자동 최소 폭 문제였음).
+- **수정 2차**(`7aacb4f`): `.favorite-card`·`.favorite-info`·카드 머리 영역에 `min-width:0;max-width:100%`를 명시하고, css 캐시 URL을 `?v=20261126-stage9b`로 바꿔 브라우저 캐시를 우회했습니다.
+- **재확인**: 수정 배포 후 같은 점검 페이지에서 `page=favorites` 360px가 `scrollWidth 360 · 넘침 X`로 바뀌었고, 7개 화면 × 3폭 **21개 조합 모두 통과**했습니다(3절 표, 증빙 `13-responsive-360-390-430.png`).
 
 ### 2.2 문서·테스트 기대값 정리
 
