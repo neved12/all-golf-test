@@ -65,10 +65,14 @@ const aliasPairs={
   'cb-royalfore':'올데이로얄포레',
   'cb-imperial':'올데이임페리얼레이크'
 };
+const nationalById=new Map(nationalCourses.map(course=>[course.id,course]));
 const usedNationalIds=new Set();
 const mergedLocal=localCourses.map(local=>{
+  /* 전국 마스터가 같은 id로 시연 골프장을 포함하므로 id 우선으로 붙인다. */
+  const sameId=nationalById.get(local.id);
+  if(sameId)usedNationalIds.add(sameId.id);
   const wanted=normalizeCourseName(aliasPairs[local.id]||local.name);
-  const match=nationalCourses.find(national=>{
+  const match=sameId||nationalCourses.find(national=>{
     if(usedNationalIds.has(national.id)||national.region!==local.region)return false;
     if(local.region!=='세종'&&national.city!==local.city)return false;
     const candidate=normalizeCourseName(national.name);

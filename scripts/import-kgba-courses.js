@@ -1,10 +1,13 @@
 /*
- * 한국골프장경영협회 2025 가이드북의 회원사 명부를 정적 JS 데이터로 변환한다.
+ * 한국골프장경영협회 2025 가이드북의 회원사 명부를 정제 레이어(JSON)로 변환한다.
  * 원본 기준일: 2024-12-08 / 원본 URL은 SOURCE_URL 참조.
  * 원문 PDF는 저작권상 저장소에 커밋하지 않는다. 아래 경로에 직접 내려받은 뒤 실행한다.
  *   curl -L -o data/sources/kgba-2025-member-courses.pdf https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf
  * 실행 예:
  *   NODE_PATH=<pdfjs-dist가 설치된 node_modules> node scripts/import-kgba-courses.js
+ *
+ * 출력 data/sources/kgba-2025-records.json 은 scripts/build-national-courses.js 의 입력 중 하나다.
+ * (협회 명부만으로는 전국 목록이 되지 않으므로 이 스크립트는 national-golf-courses.js 를 직접 쓰지 않는다.)
  */
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +20,7 @@ if (!fs.existsSync(PDF_PATH)) {
   console.error('원문 PDF가 없습니다. data/sources/README.md 안내대로 data/sources/kgba-2025-member-courses.pdf를 먼저 내려받으세요.');
   process.exit(1);
 }
-const OUTPUT_PATH = path.join(ROOT, 'data', 'national-golf-courses.js');
+const OUTPUT_PATH = path.join(ROOT, 'data', 'sources', 'kgba-2025-records.json');
 const SOURCE_URL = 'https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf';
 const SOURCE_DATE = '2024-12-08';
 
@@ -97,9 +100,19 @@ async function main() {
   const bySignature = new Map();
   for (const row of rows) bySignature.set(`${row.name}|${row.address}`, row);
   const courses = [...bySignature.values()].sort((a, b) => a.region.localeCompare(b.region, 'ko') || a.city.localeCompare(b.city, 'ko') || a.name.localeCompare(b.name, 'ko'));
-  const header = `// 자동 생성 파일. 직접 수정하지 말고 scripts/import-kgba-courses.js를 실행하세요.\n`;
-  const metadata = { source: SOURCE_URL, sourceName: '한국골프장경영협회 2025 가이드북 회원사 현황', sourceAsOf: SOURCE_DATE, generatedAt: new Date().toISOString(), count: courses.length };
-  fs.writeFileSync(OUTPUT_PATH, `${header}window.ALL_GOLF_NATIONAL_METADATA=${JSON.stringify(metadata, null, 2)};\nwindow.ALL_GOLF_NATIONAL_COURSES=${JSON.stringify(courses, null, 2)};\n`, 'utf8');
+  const payload = {
+    source: SOURCE_URL,
+    sourceName: '한국골프장경영협회 2025 가이드북 회원사 현황',
+    sourceAsOf: SOURCE_DATE,
+    generatedAt: new Date().toISOString(),
+    count: courses.length,
+    records: courses.map(course => ({
+      id: course.id, name: course.name, region: course.region, city: course.city, address: course.address,
+      operationType: course.operationType, holes: course.holes, memberHoles: course.memberHoles,
+      publicHoles: course.publicHoles, phone: course.phone
+    }))
+  };
+  fs.writeFileSync(OUTPUT_PATH, `${JSON.stringify(payload, null, 1)}\n`, 'utf8');
   console.log(JSON.stringify({ output: OUTPUT_PATH, count: courses.length, regions: Object.fromEntries(Object.entries(courses.reduce((acc, c) => { acc[c.region] = (acc[c.region] || 0) + 1; return acc; }, {})).sort()) }, null, 2));
 }
 

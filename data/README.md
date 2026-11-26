@@ -1,59 +1,41 @@
-# 충청권 골프장 마스터 데이터 작업 기록
+# ALL:GOLF 골프장 마스터 데이터
 
-`golf-courses.js`가 골프장 마스터 및 검증 대기 목록입니다. 프로토타입에서는 65곳 모두 사용자 검색과 시연 예약에 노출합니다. 실제 DB 이관 전에는 아래 미검증 항목을 운영자 또는 골프장 공식 채널로 다시 확인해야 합니다.
+전국 골프장 마스터는 공식 공개 데이터 3종을 병합해 만듭니다. 정확한 출처·기준일·건수·제외 기준은
+[`national-verification-report.md`](national-verification-report.md)에, 재현 방법은
+[`sources/README.md`](sources/README.md)에 정리되어 있습니다.
 
-## 상태와 수량
+## 파일 구성
 
-| 지역 | 등록 | 기본 위치·존재 확인 | 추가 검증 필요 |
-|---|---:|---:|---:|
-| 충남 | 26 | 13 | 13 |
-| 충북 | 34 | 19 | 15 |
-| 세종 | 3 | 3 | 0 |
-| 대전 | 2 | 1 | 1 |
-| 합계 | 65 | 36 | 29 |
+| 파일 | 역할 | 커밋 |
+|---|---|---|
+| `national-golf-courses.js` | 전국 골프장 정보 레코드(자동 생성). `window.ALL_GOLF_NATIONAL_COURSES` / `ALL_GOLF_NATIONAL_METADATA` | O |
+| `golf-courses.js` | 병합 계층. 시연 예약 68곳(고정 ID·`bookingStatus: "demo"`)을 전국 마스터에 붙이고 `window.ALL_GOLF_COURSES`/`ALL_GOLF_REGIONS`를 만든다 | O |
+| `demo-teetimes.js` | 시연 예약 가격·티타임. 실제 판매 데이터가 아니다 | O |
+| `national-build-report.json` | 생성 통계·수동 병합 근거·제외 목록(자동 생성) | O |
+| `sources/` | 원본 자료(비커밋)와 정제 레이어·정리 규칙(커밋) | 일부 |
+| `partner-application.js` · `partner-sync.js` | 제휴 신청·승인 저장소 | O |
+| `server-catalog.js` · `server-reservations.js` | 서버 연동 모드의 티타임·재고 캐시 | O |
 
-- 대중제 확인: 1곳(세종필드 GC). 회원제 확인: 0곳. 혼합형 확인: 0곳. 나머지 64곳의 운영 형태는 `null`입니다.
-- 전체 65곳의 `greenFee`, `cartFee`, `caddieFee`, 티타임, 취소 규정, 제휴 여부는 확인되지 않았습니다. 모두 `null`, 빈 배열 또는 `false`입니다.
-- 실제 ALL:GOLF 제휴 확인 골프장은 0곳입니다. 65곳 전체의 시연 가격·티타임·잔여팀은 `demo-teetimes.js`에만 있으며 실제 마스터 가격으로 옮기지 않았습니다. 기존 세 곳의 시연값은 유지했습니다.
-- 세종필드 GC, 프린세스 CC, 대호단양 CC에는 공식 예약 사이트가 확인되어 `bookingStatus: external`을 지정했습니다. 이는 해당 사이트를 안내한다는 뜻이지 ALL:GOLF 연동을 의미하지 않습니다.
-- `verified`는 기본적인 존재/위치가 협회 또는 공식 사이트에서 확인되었다는 뜻입니다. 현재 영업·회원 가입 자격·빈 티타임·가격·제휴를 보증하지 않습니다.
+## 원칙
 
-## 5단계: 제휴 승인 골프장만 시연 예약 노출
+- **공식 출처만**: 문화체육관광부 「전국 골프장 현황」, 행정안전부 「생활_골프장」(골프장업 인허가),
+  한국골프장경영협회 회원사 명부. 확인되지 않은 값은 `null`로 둔다.
+- **영업 중 코스 골프장만**: 폐업·휴업·직권말소와 실내 골프장·골프연습장·당구장·간이(파3) 시설은 제외한다.
+- **정보 전용은 `bookingStatus: "info"`**: 새로 추가된 골프장에는 실제 요금·티타임을 만들지 않는다.
+  `greenFee`·`cartFee`·`caddieFee`·`officialBookingUrl`은 `null`, `bookable`은 `false`다.
+- **시연 예약 골프장 보존**: 기존 68곳의 `id`와 `bookingStatus: "demo"`는 데이터를 다시 생성해도 바뀌지 않는다
+  (`sources/legacy-demo-courses.json`이 고정 목록이며, 생성 결과에 같은 ID로 포함된다).
+- **중복 금지**: 이름·주소·인허가 라이선스를 대조해 같은 골프장을 한 번만 등록한다. 명칭이 바뀐 골프장은
+  `sources/localdata-course-map.json`에 병합 근거를 남긴다.
 
-- 사용자 앱의 시연 예약은 **제휴 골프장**에만 열립니다. 기본 제휴는 `demo-teetimes.js`에 시연 데이터가 직접 정의된 68곳이고,
-  나머지 176곳은 `partner/`에서 접수한 제휴 신청을 본사 관리자가 승인해야 예약 가능 상태로 전환됩니다.
-- 제휴 신청·승인 저장 키는 `allGolfPartnerApplicationsV1`이고, 승인 시 `allGolfPartnershipStatusV1`도 `complete`로 갱신합니다.
-  승인된 신규 골프장은 신청 데이터에서 `ap-...` ID와 시연 티타임을 만들어 앱 마스터에 합칩니다.
-- 신청에 포함된 담당자 이름·연락처·이메일과 자유 입력 메모는 이 브라우저에만 저장되며, `demo-transfer.js` 백업에서는 제외(마스킹)됩니다.
+## 갱신 절차
 
-## 추가 검증 필요 목록 (29곳)
+```bash
+# 1) 원본 내려받기 (sources/README.md 참고)
+# 2) 전국 마스터 재생성
+node scripts/build-national-courses.js
+# 3) 데이터 무결성 + 전체 회귀 테스트
+npm test
+```
 
-- 충남: 마론 CC, 보령베이스 CC, 부여스카이힐 CC, 서산수 골프앤리조트, 아리스타 CC, SG아름다운 골프&리조트, 예미지 CC, 윈체스트 서산 CC, 파나시아 GC, 로얄링스 CC, 더힐 CC, 골드리버 CC, 계룡산 CC.
-- 충북: 대영베이스 CC, 대영힐스 CC, 떼제베 CC, 모나크 CC, 블랙스톤 벨포레 CC, 스마트쿠 CC, 아난티중앙 CC, 에콜리안 제천 CC, 젠스필드 CC, 진양밸리 CC, 청주그랜드 CC, 중원 CC, 클럽디 속리산 CC, 히든밸리 CC, 음성힐데스하임 CC.
-- 대전: 사이언스대덕 CC.
-
-위 29곳은 사용자가 제공한 이전 목록에서 가져온 *검증 대기 후보*입니다. 프로토타입에서는 골프장별 정보와 시연 예약을 테스트할 수 있지만 실제 운영·주소·예약 가능 여부는 보장하지 않습니다. 공개 서비스로 전환할 때에는 공식 출처를 확인하고 `verification`의 필드별 상태를 갱신해야 합니다.
-
-## 제외한 이전 목록 항목 (14곳)
-
-군 체력단련장 7곳(공군성무대, 계룡대, 창공대, 서산, 세종 필드, 자운대, 금병대)과 소재·운영·일반인 이용 여부가 불명확한 금강 CC, 모카 CC, 일레븐 CC, 파인크리크 CC, 청북 CC, 천안 현대자동차 GC, 당진 락가 CC를 제외했습니다. 총 14곳입니다.
-
-기존 시연 골프장인 우정힐스 CC, 세종에머슨 CC, 프린세스 CC는 마스터에 각각 한 번만 등록하고 시연 데이터와 `id`로 결합합니다. 이전 실행 시 3곳이 중복 노출되던 문제를 없앴습니다.
-
-## 원본 자료 (협회 가이드북)
-
-- 원문: [한국골프장경영협회 2025 가이드북 회원사 현황](https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf) (기준일 2024-12-08)
-- 원문 PDF는 저작권상 공개 저장소·배포 사이트에 사본으로 두지 않습니다. `national-golf-courses.js`의 `source`·`sources` 필드에 위 출처 URL만 남깁니다.
-- 전국 목록을 다시 생성해야 할 때는 원문 PDF를 로컬 `data/sources/`에 직접 내려받은 뒤 `node scripts/import-kgba-courses.js`를 실행합니다. `data/sources/*.pdf`는 `.gitignore` 대상이라 커밋되지 않습니다.
-
-## 출처와 후속 작업
-
-- 전국 회원사 명부: [한국골프장경영협회 2025 가이드북](https://www.kgba.co.kr/guidebook/2025/guidebook2025_04.pdf)
-- 기본 주소 일부: [대한골프협회 코스핸디캡 계산기](https://www.kgagolf.or.kr/web/handicap/calculator), [회원사 현황](https://www.kgagolf.or.kr/web/golfCourse/golfCourse).
-- 세종필드: [공식 홈페이지](https://www.sejongcc.co.kr/index).
-- 프린세스: [공식 요금/예약 안내](https://m.princessgc.co.kr/guide/fee).
-- 대호단양: [공식 홈페이지](https://www.daehocc.co.kr/).
-- 세종레이캐슬: [공식 홈페이지](https://www.sjraycastle.com/).
-- 나머지 골프장 이름과 시·군은 사용자가 제공한 초기 목록을 바탕으로 했으며 독립 검증 전입니다.
-
-DB 이관 시 `id`를 안정적인 외부 키로 사용하고 `source`, `lastUpdated`, `verified`, `bookingStatus`를 별도 검증 이력과 예약 계약 테이블로 분리하는 것이 좋습니다. 운영 형태나 가격을 확인하면 출처 URL과 확인일을 함께 기록하세요.
+`national-golf-courses.js`와 `national-build-report.json`은 자동 생성 파일이므로 직접 수정하지 않습니다.

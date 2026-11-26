@@ -21,5 +21,8 @@ server/data/*.lock
 server/data/db.corrupt-*.json
 server/data/backups/
 
-# 협회 가이드북 원본 PDF는 재배포하지 않습니다. 로컬에서만 내려받아 사용하세요.
+# 원본 자료(PDF·CSV·ZIP)는 재배포하지 않습니다. 로컬에서만 내려받아 사용하고,
+# 정제 결과(JSON 레이어)와 생성 스크립트·검증 보고서만 커밋합니다.
 data/sources/*.pdf
+data/sources/*.csv
+data/sources/*.zip

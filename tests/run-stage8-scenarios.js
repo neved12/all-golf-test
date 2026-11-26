@@ -158,7 +158,7 @@ async function main() {
 
     const home = await call('GET', '/');
     ok('고객 앱에 예약 클라이언트 포함', home.text.includes('data/server-reservations.js'));
-    ok('정적 자산 최신 캐시 버전', home.text.includes('v=20261126-stage9'), 'v=20261126-stage9');
+    ok('정적 자산 최신 캐시 버전', /v=20261126-(stage9b|national)/.test(home.text), 'v=20261126-national');
 
     /* 2. 준비: 골프장 A/B 승인·계정·티타임 -------------------------------- */
     section('8단계 · 준비: 골프장 A/B 승인과 티타임');

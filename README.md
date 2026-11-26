@@ -96,7 +96,8 @@ Windows에서는 `start-server.bat` 더블클릭으로도 실행됩니다.
 ## 테스트
 
 ```bash
-npm test                              # 아래 네 테스트를 모두 실행
+npm test                              # 아래 테스트를 모두 실행 (전국 데이터 무결성 포함)
+node tests/national-data-integrity.js # 전국 골프장 데이터 무결성 39개 (중복·지역·시연 68곳 보존·오염 방지)
 node tests/run-scenarios.js           # 기존 회귀 120개
 node tests/run-server-scenarios.js    # 6단계 서버·DB 90개 (임시 DB로 실제 서버 기동)
 node tests/run-stage7-scenarios.js    # 7단계 계정·권한·티타임·특가 187개
@@ -111,7 +112,7 @@ node tests/run-ui-smoke.js            # 화면 스크립트 스모크 55개 (par
 index.html, app.js, styles.css   사용자 앱
 partner/                         골프장 관리자
 admin/                           본사 관리자
-data/                            골프장 마스터·시연 재고, 제휴 저장소, API 클라이언트, 서버 카탈로그 동기화
+data/                            전국 골프장 마스터(511곳)·시연 재고, 제휴 저장소, API 클라이언트, 서버 카탈로그 동기화
 server/                          무의존성 Node API 서버 + 파일 DB
 tests/                           브라우저 없이 실행하는 시나리오 테스트
 ```

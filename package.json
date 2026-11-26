@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "test": "node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js && node tests/run-stage8-scenarios.js && node tests/run-stage9-scenarios.js",
+    "test": "node tests/national-data-integrity.js && node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js && node tests/run-stage8-scenarios.js && node tests/run-stage9-scenarios.js",
+    "test:data": "node tests/national-data-integrity.js",
     "test:regression": "node tests/run-scenarios.js",
     "test:server": "node tests/run-server-scenarios.js",
     "test:stage7": "node tests/run-stage7-scenarios.js",
