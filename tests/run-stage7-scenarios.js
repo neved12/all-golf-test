@@ -471,7 +471,8 @@ async function main() {
     ok('DB 파일 존재', fs.existsSync(dbPath));
     const rawDb = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
     /* 8단계에서 스키마 버전 3 으로 올라갔다(7단계 데이터는 자동 호환). */
-    ok('DB 버전 3(7단계 데이터 호환)', rawDb.version === 3, rawDb.version);
+    /* 9단계에서 스키마가 v4 로 올라가도 7단계 데이터가 유지되는지 확인한다. */
+    ok('DB 버전 3 이상(7단계 데이터 호환)', Number(rawDb.version) >= 3, rawDb.version);
     eq('DB에 담당자 계정 3개', (rawDb.partnerAccounts || []).length, 3);
     eq('DB에 티타임 2건', (rawDb.teeTimes || []).length, 2);
     ok('DB에 요금·특가 저장', Boolean(rawDb.rates[courseA]) && (rawDb.specialOffers || []).length === 1);

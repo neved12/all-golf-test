@@ -10,7 +10,7 @@ const path = require('path');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function emptyDatabase() {
   return {
@@ -24,7 +24,11 @@ function emptyDatabase() {
     specialOffers: [],
     reservations: [],
     bookingHolds: [],
-    auditLogs: []
+    auditLogs: [],
+    /* 9단계: 골프장별 수수료율 · 정산서 · 운영 알림 시뮬레이션 로그 */
+    commissionRates: {},
+    settlements: [],
+    notificationLogs: []
   };
 }
 
@@ -46,6 +50,10 @@ function normalizeDatabase(raw) {
   db.reservations = Array.isArray(db.reservations) ? db.reservations : [];
   db.bookingHolds = Array.isArray(db.bookingHolds) ? db.bookingHolds : [];
   db.auditLogs = Array.isArray(db.auditLogs) ? db.auditLogs : [];
+  /* 9단계 컬렉션: v1~v3 DB 를 읽어도 빈 구조로 자동 보완해 v4 로 승격한다. */
+  db.commissionRates = db.commissionRates && typeof db.commissionRates === 'object' && !Array.isArray(db.commissionRates) ? db.commissionRates : {};
+  db.settlements = Array.isArray(db.settlements) ? db.settlements : [];
+  db.notificationLogs = Array.isArray(db.notificationLogs) ? db.notificationLogs : [];
   return db;
 }
 
@@ -119,6 +127,10 @@ class Store {
       confirmedReservations: db.reservations.filter(item => item.status === 'confirmed').length,
       activeHolds: db.bookingHolds.filter(item => item.status === 'active').length,
       auditLogs: db.auditLogs.length,
+      commissionRates: Object.keys(db.commissionRates || {}).length,
+      settlements: (db.settlements || []).length,
+      pendingSettlements: (db.settlements || []).filter(item => ['DRAFT', 'PENDING'].includes(item.status)).length,
+      notificationLogs: (db.notificationLogs || []).length,
       revision: db.meta.revision,
       updatedAt: db.meta.updatedAt
     };
@@ -251,7 +263,10 @@ class Store {
           teeTimes: parsed.teeTimes.length,
           specialOffers: parsed.specialOffers.length,
           reservations: parsed.reservations.length,
-          holds: parsed.bookingHolds.length
+          holds: parsed.bookingHolds.length,
+          commissionRates: Object.keys(parsed.commissionRates || {}).length,
+          settlements: parsed.settlements.length,
+          notificationLogs: parsed.notificationLogs.length
         }
       };
     } finally {

@@ -9,7 +9,7 @@ let serverApplications=null,serverStats=null;
 const loginState=()=>localStorage.getItem(AUTH);
 const isPartnered=id=>window.ALL_GOLF_PARTNER_STORE?window.ALL_GOLF_PARTNER_STORE.isPartnerCourse(id):Boolean(demoCourses[id]);let page='dash',period='today',courseQuery='',courseRegion='전체',courseType='all',courseScope='all',applicationFilter='all';const get=k=>JSON.parse(localStorage.getItem(k)||'[]'),set=(k,v)=>localStorage.setItem(k,JSON.stringify(v)),money=n=>Number(n||0).toLocaleString('ko-KR')+'원',esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function seed(){if(!get(PKEY).length)set(PKEY,[{id:'p1',name:'레이크힐스 용인 CC',manager:'김영업',phone:'010-3000-1000',region:'경기',status:'정상 운영',fee:10,cycle:'매월 15일',created:'2026-08-01'},{id:'p2',name:'우정힐스 CC',manager:'박지훈',phone:'010-3000-1001',region:'충청',status:'정상 운영',fee:12,cycle:'매월 15일',created:'2026-08-02'},{id:'p3',name:'제주 더 시에나 CC',manager:'이민지',phone:'010-3000-1002',region:'제주',status:'심사 중',fee:10,cycle:'매월 말일',created:'2026-08-10'}]);if(!get(MKEY).length)set(MKEY,[{id:'U-1001',name:'김골퍼',phone:'010-1234-5678',email:'golf@example.com',joined:'2026-08-01',status:'정상'},{id:'U-1002',name:'박라운드',phone:'010-2222-3333',email:'round@example.com',joined:'2026-08-03',status:'정상'}]);if(!get(QKEY).length)set(QKEY,[{id:'Q-1',type:'예약',writer:'김골퍼',title:'예약 확인 문의',status:'접수',content:'예약번호 확인 부탁드립니다.',answer:''},{id:'Q-2',type:'제휴 문의',writer:'새로운 CC',title:'제휴 등록 문의',status:'확인 중',content:'제휴 절차가 궁금합니다.',answer:''}])}
-function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['accounts','제휴 계정 관리'],['operations','골프장 운영 현황'],['audit','승인 처리 이력'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div>${modeChip()}</div>${modeBanner()}${body}</main></div>`}
+function shell(title,body){const pendingApplications=window.ALL_GOLF_PARTNER_STORE?.pendingCount()||0;return `<div class="shell"><aside class="side"><div class="brand"><b>●</b> ALL:GOLF</div><small>본사 운영 관리자 · 시연용</small>${[['dash','전국 운영 대시보드'],['courses','전국 골프장'],['partners','제휴 현황'],['applications','제휴 신청 관리'],['accounts','제휴 계정 관리'],['operations','골프장 운영 현황'],['analytics','운영 통계·제휴 성과'],['audit','승인 처리 이력'],['tees','전체 티타임'],['reservations','전체 예약'],['waitlist','예약 대기'],['refunds','취소·환불'],['members','회원 관리'],['settlements','정산·수수료 관리'],['banners','배너·혜택 관리'],['inquiries','고객 문의'],['settings','운영 설정'],['transfer','시연 데이터 백업·복원']].map(x=>`<button class="nav ${page===x[0]?'active':''}" data-page="${x[0]}">${x[1]}${x[0]==='applications'&&pendingApplications?` <em class="nav-count">${pendingApplications}</em>`:''}</button>`).join('')}<button class="nav logout" id="logout">로그아웃</button></aside><main class="main"><div class="top"><div><h1>${title}</h1><p>ALL:GOLF 본사 통합 운영 콘솔</p></div>${modeChip()}</div>${modeBanner()}${body}</main></div>`}
 function waitlist(){const items=window.ALL_GOLF_STORE?.getWaitlist()||[],notes=window.ALL_GOLF_STORE?.getNotifications()||[];return shell('예약 대기',`<section class="panel"><div class="head"><h2>시연 대기 ${items.length}건 · 내부 알림 ${notes.length}건</h2></div><p class="notice">같은 브라우저의 시연 데이터만 표시합니다. 실제 고객 알림 발송이나 자동 예약은 없습니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>희망 날짜</th><th>시간대</th><th>인원</th><th>최대 1인 가격</th><th>상태</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(masterCourses.find(c=>c.id===x.courseId)?.name||x.courseId)}</td><td>${esc(x.date)}</td><td>${esc(x.fromTime)}~${esc(x.toTime)}</td><td>${Number(x.people)||0}명</td><td>${money(x.maxPrice)}</td><td>${({active:'대기 중',cancelled:'취소',completed:'예약 완료로 정리',expired:'만료'})[x.status]||x.status}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">대기 신청이 없습니다.</td></tr>'}</tbody></table></div></section>`)}
 
 function courseDirectory(){const normalized=courseQuery.toLocaleLowerCase('ko').replace(/\s/g,'');const rows=masterCourses.filter(course=>{const text=`${course.name}${course.region}${course.city}${course.address||''}`.toLocaleLowerCase('ko').replace(/\s/g,'');return (!normalized||text.includes(normalized))&&(courseRegion==='전체'||course.region===courseRegion)&&(courseType==='all'||course.operationType===courseType)&&(courseScope==='all'||(courseScope==='bookable')===isPartnered(course.id))});const regions=['전체',...new Set(masterCourses.map(course=>course.region))];return shell('전국 골프장',`<section class="panel"><div class="head"><div><h2>골프장 마스터 ${rows.length}곳</h2><p class="admin-caption">공식 공개자료와 기존 검증 데이터를 병합한 조회용 목록입니다. 가격·티타임은 포함하지 않습니다.</p></div><button class="primary" id="download-courses">CSV 다운로드</button></div><div class="course-tools"><input id="course-query" value="${esc(courseQuery)}" placeholder="골프장명·지역·주소 검색"><select id="course-region">${regions.map(value=>`<option ${courseRegion===value?'selected':''}>${value}</option>`).join('')}</select><select id="course-type"><option value="all">전체 운영형태</option><option value="public" ${courseType==='public'?'selected':''}>대중제</option><option value="membership" ${courseType==='membership'?'selected':''}>회원제</option><option value="mixed" ${courseType==='mixed'?'selected':''}>혼합형</option><option value="unknown" ${courseType==='unknown'?'selected':''}>미확인</option></select><select id="course-scope"><option value="all">전체</option><option value="bookable" ${courseScope==='bookable'?'selected':''}>제휴 예약 가능</option><option value="info" ${courseScope==='info'?'selected':''}>정보 제공</option></select></div><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>지역</th><th>주소</th><th>운영형태</th><th>홀</th><th>예약 상태</th><th>출처 기준일</th></tr></thead><tbody>${rows.slice(0,200).map(course=>`<tr><td><b>${course.name}</b><br><small>${course.id}</small></td><td>${course.region} · ${course.city}</td><td>${course.address||'미확인'}</td><td>${course.operationType==='public'?'대중제':course.operationType==='membership'?'회원제':course.operationType==='mixed'?'혼합형':'미확인'}</td><td>${course.holes||'미확인'}</td><td><span class="badge ${isPartnered(course.id)?'':'warn'}">${isPartnered(course.id)?'제휴 예약':'정보 제공'}</span></td><td>${course.sourceAsOf||course.lastVerified||'미확인'}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">검색 결과가 없습니다.</td></tr>'}</tbody></table></div>${rows.length>200?'<div class="notice">화면에는 처음 200곳만 표시됩니다. 전체 결과는 CSV로 내려받을 수 있습니다.</div>':''}</section>`)}
@@ -98,7 +98,7 @@ function refunds(){
   return shell('취소·환불 관리',`<section class="panel"><div class="head"><h2>취소 내역</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>예약번호</th><th>골프장</th><th>예약자</th><th>이용일</th><th>예약금</th><th>환불액</th><th>처리 상태</th><th>관리</th></tr></thead><tbody>${rows}</tbody></table></div></section>`)
 }
 function members(){let m=get(MKEY),r=get(RKEY);return shell('회원 관리',`<section class="panel"><div class="head"><h2>회원 목록</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>회원번호</th><th>이름</th><th>휴대전화</th><th>이메일</th><th>가입일</th><th>예약</th><th>취소</th><th>상태</th><th>관리</th></tr></thead><tbody>${m.map(x=>`<tr><td>${x.id}</td><td>${x.name}</td><td>${x.phone}</td><td>${x.email}</td><td>${x.joined}</td><td>${r.filter(y=>(y.booker||y.name)===x.name).length}건</td><td>0건</td><td><span class="badge">${x.status}</span></td><td><button class="secondary" data-member="${x.id}">상세</button></td></tr>`).join('')}</tbody></table></div></section>`)}
-function settlements(){let p=get(PKEY),r=get(RKEY).filter(x=>x.status==='confirmed');return shell('정산 관리',`<section class="panel"><div class="head"><h2>골프장별 정산</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>정산번호</th><th>골프장</th><th>기간</th><th>예약 건수</th><th>예약금 총액</th><th>수수료</th><th>지급 예정액</th><th>상태</th><th>상세</th></tr></thead><tbody>${p.map((x,i)=>{let amount=r.reduce((s,v)=>s+(v.deposit||0),0),fee=Math.round(amount*x.fee/100);return `<tr><td>ST-202608-${String(i+1).padStart(3,'0')}</td><td>${x.name}</td><td>2026.08.01~08.31</td><td>${r.length}건</td><td>${money(amount)}</td><td>${money(fee)}</td><td>${money(amount-fee)}</td><td><span class="badge warn">정산 검토</span></td><td><button class="secondary">상세</button></td></tr>`}).join('')}</tbody></table></div></section>`)}
+function settlements(){if(isServerMode())return settlementsPage();let p=get(PKEY),r=get(RKEY).filter(x=>x.status==='confirmed');return shell('정산·수수료 관리',`<section class="panel"><div class="head"><h2>골프장별 정산(정적 시연)</h2></div><p class="notice">정적 시연 모드의 예시 표입니다. 서버를 실행하면 수수료율·정산서·상태 전이가 서버 DB 기준으로 동작합니다.</p><div class="table-wrap"><table class="table"><thead><tr><th>정산번호</th><th>골프장</th><th>기간</th><th>예약 건수</th><th>예약금 총액</th><th>수수료</th><th>지급 예정액</th><th>상태</th><th>상세</th></tr></thead><tbody>${p.map((x,i)=>{let amount=r.reduce((s,v)=>s+(v.deposit||0),0),fee=Math.round(amount*x.fee/100);return `<tr><td>ST-202608-${String(i+1).padStart(3,'0')}</td><td>${x.name}</td><td>2026.08.01~08.31</td><td>${r.length}건</td><td>${money(amount)}</td><td>${money(fee)}</td><td>${money(amount-fee)}</td><td><span class="badge warn">정산 검토</span></td><td><button class="secondary">상세</button></td></tr>`}).join('')}</tbody></table></div></section>`)}
 function banners(){return shell('배너·혜택 관리',`<section class="panel"><div class="head"><h2>홈 배너 및 혜택</h2><button class="primary" id="new-banner">+ 콘텐츠 등록</button></div><div class="notice">시연용 콘텐츠입니다. 노출 순서와 공개 여부를 관리할 수 있습니다.</div><div class="table-wrap"><table class="table"><thead><tr><th>유형</th><th>제목</th><th>연결 경로</th><th>노출 기간</th><th>상태</th><th>순서</th><th>관리</th></tr></thead><tbody><tr><td>홈 배너</td><td>제주 2박 3일 골프여행</td><td>/travel/jeju</td><td>2026.08.01~08.31</td><td><span class="badge">노출</span></td><td>1</td><td><button class="secondary">수정</button></td></tr><tr><td>특가</td><td>주말 특가 티타임</td><td>/reserve</td><td>2026.08.10~08.20</td><td><span class="badge">노출</span></td><td>2</td><td><button class="secondary">수정</button></td></tr></tbody></table></div></section>`)}
 function inquiries(){let q=get(QKEY);return shell('고객 문의',`<section class="panel"><div class="head"><h2>문의 목록</h2></div><div class="table-wrap"><table class="table"><thead><tr><th>유형</th><th>작성자</th><th>제목</th><th>상태</th><th>관리</th></tr></thead><tbody>${q.map(x=>`<tr><td>${x.type}</td><td>${x.writer}</td><td>${x.title}</td><td><span class="badge ${x.status==='답변 완료'?'':'warn'}">${x.status}</span></td><td><button class="secondary" data-inquiry="${x.id}">답변</button></td></tr>`).join('')}</tbody></table></div></section>`)}
 function settings(){return shell('운영 설정',`<section class="panel"><h2>운영 정책</h2><div class="form-grid"><label class="field">기본 예약금<input value="30,000"></label><label class="field">기본 수수료율<input value="10"></label><label class="field full">운영 공지<textarea rows="3">ALL:GOLF 시연용 운영 설정입니다.</textarea></label></div><div class="actions"><button class="primary" id="save-settings">저장</button></div></section>`)}
@@ -113,6 +113,14 @@ function bind(){
   if(isServerMode()&&page==='audit'){loadAuditServer('audit-root',200)}
   if(isServerMode()&&page==='accounts'){loadAccountsServer();document.querySelector('#new-partner-account')?.addEventListener('click',()=>{if(!adminCoursesCache.length){apiClient.request('/api/partner-courses',{timeoutMs:6000}).then(response=>{adminCoursesCache=(response.data&&response.data.courses)||[];newAccountModal()})}else newAccountModal()})}
   if(isServerMode()&&page==='operations'){loadOperationsServer()}
+  if(isServerMode()&&page==='analytics'){loadAnalyticsServer()}
+  if(isServerMode()&&page==='settlements'){loadSettlementsServer()}
+  document.querySelectorAll('[data-analytics-period]').forEach(x=>x.onclick=()=>{analyticsPeriod=x.dataset.analyticsPeriod;adminAnalytics=null;render()});
+  document.querySelector('#analytics-csv')?.addEventListener('click',()=>downloadAdminFile(`/api/admin/analytics?period=${encodeURIComponent(analyticsPeriod)}&format=csv`,`allgolf-analytics-${analyticsPeriod}-${todayIso()}.csv`));
+  document.querySelector('#analytics-json')?.addEventListener('click',()=>downloadAdminFile('',`allgolf-analytics-${analyticsPeriod}-${todayIso()}.json`,JSON.stringify(adminAnalytics||{},null,2)));
+  document.querySelector('#refresh-settlements')?.addEventListener('click',()=>{adminSettlements=null;adminCommissionRows=null;loadSettlementsServer()});
+  document.querySelector('#settlements-csv')?.addEventListener('click',()=>downloadAdminFile('/api/admin/settlements/export',`allgolf-settlements-${todayIso()}.csv`));
+  document.querySelector('#create-settlement')?.addEventListener('click',createSettlementFromForm);
   if(isServerMode()&&(page==='reservations'||page==='refunds')){loadAdminReservations()}
   document.querySelector('#refresh-accounts')?.addEventListener('click',loadAccountsServer);
   document.querySelector('#refresh-operations')?.addEventListener('click',loadOperationsServer);
@@ -257,14 +265,131 @@ async function showOperationsTees(courseId,date){
   modal.innerHTML=`<div class="modal-bg"><section class="modal application-modal"><h2>${esc(date)} 티타임</h2><p>${esc(courseId)} · 서버 DB 기준</p><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>팀</th><th>그린피</th><th>상태</th><th>수정자</th></tr></thead><tbody>${items.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${tee.capacityTeams}</td><td>${money(tee.greenFee)}</td><td>${esc(tee.statusLabel)}</td><td>${esc((tee.updatedBy&&tee.updatedBy.email)||'-')}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">등록된 티타임이 없습니다.</td></tr>'}</tbody></table></div><div class="modal-actions"><button class="primary" data-close>확인</button></div></section></div>`;
   document.querySelector('[data-close]').onclick=close;
 }
+/* --- 9단계: 운영 통계·제휴 성과 · 수수료/정산 시뮬레이션 ------------------ */
+let adminAnalytics=null,analyticsPeriod='30d',analyticsLoading=false;
+let adminSettlements=null,adminCommissionRows=null,settlementsLoading=false,settlementStatusFilter='all';
+const settlementStatusLabel=status=>({DRAFT:'작성 중',PENDING:'확인 대기',CONFIRMED:'확정',PAID:'지급 완료'})[status]||status;
+const settlementStatusClass=status=>status==='PAID'?'approved':status==='CONFIRMED'?'active':status==='PENDING'?'warn':'closed';
+const rateText=value=>`${Number(value||0)}%`;
+const todayIso=()=>new Date(Date.now()+9*3600*1000).toISOString().slice(0,10);
+const shiftIso=(iso,days)=>{const base=new Date(`${iso}T00:00:00Z`);base.setUTCDate(base.getUTCDate()+days);return base.toISOString().slice(0,10)};
+
+async function downloadAdminFile(pathname,filename,fallbackJson){
+  try{
+    if(fallbackJson!=null){
+      const url=URL.createObjectURL(new Blob([fallbackJson],{type:'application/json;charset=utf-8'}));
+      const link=document.createElement('a');link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      return;
+    }
+    const response=await fetch(apiClient.apiUrl(pathname),{headers:{Authorization:`Bearer ${adminToken()}`},cache:'no-store'});
+    if(!response.ok){alert('다운로드하지 못했습니다. 다시 로그인한 뒤 시도해주세요.');handleAdminError({status:response.status});return}
+    const text=await response.text();
+    const url=URL.createObjectURL(new Blob([text],{type:pathname.includes('csv')?'text/csv;charset=utf-8':'application/json;charset=utf-8'}));
+    const link=document.createElement('a');link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(error){alert('다운로드하지 못했습니다.');}
+}
+
+function analyticsPage(){
+  if(!isServerMode()){
+    return shell('운영 통계·제휴 성과','<section class="panel"><div class="head"><h2>기간별 운영 통계</h2></div><div class="empty">정적 시연 모드에서는 서버 운영 통계가 없습니다. <code>npm start</code> 로 서버를 실행하면 예약·제휴 성과 지표가 표시됩니다.</div><p class="notice">정적 모드에서는 네트워크 요청을 보내지 않습니다.</p></section>');
+  }
+  return shell('운영 통계·제휴 성과',`<section class="panel"><div class="head"><div><h2>기간별 운영 통계</h2><p class="admin-caption">예약 접수일 기준 집계입니다. GMV 는 취소되지 않은 예약(확정·이용완료·노쇼)의 예약 총액이며, 정산은 라운드일 기준으로 별도 계산합니다. 시연용 집계입니다.</p></div><div class="tools"><button class="secondary" id="analytics-csv">CSV 내보내기</button> <button class="secondary" id="analytics-json">JSON 내보내기</button></div></div><div class="tabs application-tabs">${[['today','오늘'],['7d','최근 7일'],['30d','최근 30일'],['all','전체']].map(([id,label])=>`<button class="${analyticsPeriod===id?'active':''}" data-analytics-period="${id}">${label}</button>`).join('')}</div><div id="analytics-root">${adminAnalytics?analyticsBody(adminAnalytics):'<div class="notice">서버에서 불러오는 중…</div>'}</div></section>`)
+}
+async function loadAnalyticsServer(){
+  if(!isServerMode()||analyticsLoading)return;
+  analyticsLoading=true;
+  const response=await apiClient.request(`/api/admin/analytics?period=${encodeURIComponent(analyticsPeriod)}`,{token:adminToken(),timeoutMs:10000});
+  analyticsLoading=false;
+  const root=document.querySelector('#analytics-root');
+  if(!response.ok){if(root)root.innerHTML=`<div class="form-error">${esc((response.error&&response.error.message)||'통계를 불러오지 못했습니다.')}</div>`;handleAdminError(response);return}
+  adminAnalytics=response.data;
+  if(root)root.innerHTML=analyticsBody(adminAnalytics);
+}
+function analyticsBody(data){
+  const totals=data.totals||{},apps=data.applications||{},period=data.period||{};
+  const kpis=[['예약 건수',`${totals.reservations||0}건`],['GMV',money(totals.gmv)],['취소·환불액',money(totals.refundAmount)],['취소 수수료',money(totals.cancellationFee)],['노쇼율',rateText(totals.noShowRate)],['객단가',money(totals.averageTicket)]];
+  const appKpis=[['제휴 신청',`${apps.total||0}건`],['승인',`${apps.approved||0}건`],['반려',`${apps.rejected||0}건`],['승인 전환율',rateText(apps.conversionRate)],['기간 내 승인',`${apps.approvedInPeriod||0}건`]];
+  const sessions=totals.sessions||{};
+  return `<div class="notice">${esc(period.label||'')} · ${esc(period.basisLabel||'')} · ${esc(data.note||'')}</div><section class="national-kpis application-kpis">${kpis.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><section class="national-kpis application-kpis">${appKpis.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="table-wrap"><table class="table"><thead><tr><th>부(시간대)</th><th>예약 건수</th><th>비중</th></tr></thead><tbody>${['1부','2부','3부'].map(key=>{const count=Number(sessions[key]||0);const base=['1부','2부','3부'].reduce((sum,item)=>sum+Number(sessions[item]||0),0);return `<tr><td><b>${key}</b></td><td>${count}건</td><td>${base?Math.round(count*1000/base)/10:0}%</td></tr>`}).join('')}</tbody></table></div><div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>예약</th><th>인원</th><th>GMV</th><th>취소·환불</th><th>취소 수수료</th><th>정산 기준액</th><th>수수료율</th><th>플랫폼 수수료</th><th>정산 예정액</th></tr></thead><tbody>${(data.byCourse||[]).map(row=>`<tr><td><b>${esc(row.courseName||row.courseId)}</b><small class="demo-cell">${esc(row.courseId)}</small></td><td>${row.reservations}건<small class="demo-cell">확정 ${row.confirmed} · 취소 ${row.cancelled} · 노쇼 ${row.noShow}</small></td><td>${row.people}명</td><td>${money(row.gmv)}</td><td>${money(row.refundAmount)}</td><td>${money(row.cancellationFee)}</td><td>${money(row.basisAmount)}</td><td>${rateText(row.commissionRatePercent)}${row.commissionSource==='default'?'<small class="demo-cell">기본</small>':''}</td><td>${money(row.platformFee)}</td><td>${money(row.payoutAmount)}</td></tr>`).join('')||'<tr><td colspan="10" class="empty">해당 기간에 집계할 예약이 없습니다.</td></tr>'}</tbody></table></div><p class="notice">정산 기준액 = GMV + 취소 수수료 · 플랫폼 수수료 = 정산 기준액 × 수수료율 · 정산 예정액 = 정산 기준액 − 플랫폼 수수료</p>`;
+}
+
+function settlementsPage(){
+  if(!isServerMode())return settlements();
+  const today=todayIso();
+  return shell('정산·수수료 관리',`<section class="panel"><div class="head"><div><h2>정산서 생성·상태 전이</h2><p class="admin-caption">DRAFT → PENDING → CONFIRMED → PAID 순서로만 진행됩니다. 같은 골프장·같은 기간의 정산서는 중복 생성되지 않습니다(409). 시연용이며 실제 계좌 이체는 없습니다.</p></div><div class="tools"><button class="secondary" id="settlements-csv">정산 CSV</button> <button class="secondary" id="refresh-settlements">새로고침</button></div></div><div class="form-grid"><label class="field">골프장<select id="settlement-course">${(adminCommissionRows||[]).map(row=>`<option value="${esc(row.courseId)}">${esc(row.courseName)} (${rateText(row.ratePercent)})</option>`).join('')||'<option value="">골프장을 불러오는 중</option>'}</select></label><label class="field">시작일<input id="settlement-from" type="date" value="${shiftIso(today,-30)}"></label><label class="field">종료일<input id="settlement-to" type="date" value="${today}"></label><label class="field">생성 상태<select id="settlement-status"><option value="DRAFT">DRAFT (작성 중)</option><option value="PENDING">PENDING (확인 대기)</option></select></label></div><div class="actions"><button class="primary" id="create-settlement">정산서 계산·생성</button></div><div class="notice">정산 기준: 라운드일이 기간에 포함된 예약 · 정산 기준액 = GMV + 취소 수수료 · 플랫폼 수수료 = 기준액 × 수수료율</div><div id="settlements-root">${adminSettlements?settlementsBody():'<div class="notice">서버에서 불러오는 중…</div>'}</div></section><section class="panel"><div class="head"><div><h2>골프장별 수수료율</h2><p class="admin-caption">기본 8% · 0~30% 범위에서 설정합니다. 변경은 감사 로그에 기록되며, 이미 만든 정산서의 수수료율은 생성 시점 값으로 유지됩니다.</p></div></div><div id="commission-root">${adminCommissionRows?commissionBody():'<div class="notice">불러오는 중…</div>'}</div></section>`)
+}
+async function loadSettlementsServer(){
+  if(!isServerMode()||settlementsLoading)return;
+  settlementsLoading=true;
+  const [list,commissions]=await Promise.all([
+    apiClient.request('/api/admin/settlements',{token:adminToken(),timeoutMs:10000}),
+    apiClient.request('/api/admin/commissions',{token:adminToken(),timeoutMs:10000})
+  ]);
+  settlementsLoading=false;
+  const root=document.querySelector('#settlements-root');
+  const commissionRoot=document.querySelector('#commission-root');
+  if(!list.ok){if(root)root.innerHTML=`<div class="form-error">${esc((list.error&&list.error.message)||'정산 목록을 불러오지 못했습니다.')}</div>`;handleAdminError(list);return}
+  adminSettlements=list.data;
+  if(commissions.ok)adminCommissionRows=commissions.data.courses||[];
+  if(root)root.innerHTML=settlementsBody();
+  if(commissionRoot)commissionRoot.innerHTML=commissionBody();
+  const select=document.querySelector('#settlement-course');
+  if(select&&adminCommissionRows&&!select.value&&adminCommissionRows.length)select.value=adminCommissionRows[0].courseId;
+  bindSettlementActions();
+}
+function settlementsBody(){
+  const data=adminSettlements||{},totals=data.totals||{};
+  const kpis=[['정산서',`${data.count||0}건`],['확정',`${(data.byStatus&&data.byStatus.CONFIRMED)||0}건`],['지급 완료',`${(data.byStatus&&data.byStatus.PAID)||0}건`],['정산 기준액 합계',money(totals.basisAmount)],['플랫폼 수수료 합계',money(totals.platformFee)],['지급 예정 합계',money(totals.payoutAmount)]];
+  return `<section class="national-kpis application-kpis">${kpis.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><div class="table-wrap"><table class="table"><thead><tr><th>정산번호</th><th>골프장</th><th>기간</th><th>상태</th><th>수수료율</th><th>정산 기준액</th><th>플랫폼 수수료</th><th>정산 예정액</th><th>처리</th></tr></thead><tbody>${(data.settlements||[]).filter(item=>settlementStatusFilter==='all'||item.status===settlementStatusFilter).map(item=>`<tr><td><b>${esc(item.number)}</b><small class="demo-cell">${esc(item.id)}</small></td><td>${esc(item.courseName||item.courseId)}</td><td>${esc((item.period&&item.period.from)||'')}~${esc((item.period&&item.period.to)||'')}<small class="demo-cell">예약 ${item.reservations}건</small></td><td><span class="badge ${settlementStatusClass(item.status)}">${esc(settlementStatusLabel(item.status))}</span></td><td>${rateText(item.commissionRatePercent)}</td><td>${money(item.basisAmount)}</td><td>${money(item.platformFee)}</td><td><b>${money(item.payoutAmount)}</b></td><td>${(item.nextStatuses||[]).length?item.nextStatuses.map(next=>`<button class="secondary" data-settlement-next="${esc(next.status)}" data-settlement-id="${esc(item.id)}" data-settlement-version="${Number(item.version)||1}">${esc(next.label)}</button>`).join(' '):'<small class="demo-cell">처리 완료</small>'}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">생성된 정산서가 없습니다. 위에서 기간과 골프장을 선택해 정산서를 계산하세요.</td></tr>'}</tbody></table></div><p class="notice">${esc(data.note||'')}</p>`;
+}
+function commissionBody(){
+  const rows=adminCommissionRows||[];
+  return `<div class="table-wrap"><table class="table"><thead><tr><th>골프장</th><th>현재 수수료율</th><th>변경</th><th>최근 변경</th><th>미완료 정산</th></tr></thead><tbody>${rows.map(row=>`<tr><td><b>${esc(row.courseName)}</b><small class="demo-cell">${esc(row.courseId)}</small></td><td>${rateText(row.ratePercent)} ${row.source==='default'?'<small class="demo-cell">기본값</small>':'<small class="demo-cell">설정값</small>'}</td><td><input id="rate-${esc(row.courseId)}" class="rate-input" type="number" min="0" max="30" step="0.5" value="${Number(row.ratePercent)}" style="width:90px"> <button class="secondary" data-rate-save="${esc(row.courseId)}" data-rate-version="${Number(row.version)||0}">저장</button></td><td>${esc(String(row.updatedAt||'-').slice(0,16).replace('T',' '))}<small class="demo-cell">${esc((row.updatedBy&&row.updatedBy.email)||'')}</small></td><td>${Number(row.openSettlements)||0}건</td></tr>`).join('')||'<tr><td colspan="5" class="empty">제휴 승인된 골프장이 없습니다.</td></tr>'}</tbody></table></div>`;
+}
+function bindSettlementActions(){
+  document.querySelectorAll('[data-rate-save]').forEach(button=>button.onclick=async()=>{
+    const courseId=button.dataset.rateSave,field=document.querySelector(`#rate-${courseId}`);
+    const ratePercent=field?field.value:'';
+    button.disabled=true;
+    const response=await apiClient.request(`/api/admin/commissions/${encodeURIComponent(courseId)}`,{method:'PUT',token:adminToken(),body:{ratePercent,version:Number(button.dataset.rateVersion)}});
+    button.disabled=false;
+    if(!response.ok){alert((response.error&&response.error.message)||'수수료율을 저장하지 못했습니다.');handleAdminError(response);return}
+    alert(`${response.data.commission.courseId} 수수료율이 ${rateText(response.data.commission.ratePercent)}로 저장되었습니다. (시연)`);
+    adminSettlements=null;adminCommissionRows=null;render();
+  });
+  document.querySelectorAll('[data-settlement-next]').forEach(button=>button.onclick=async()=>{
+    const next=button.dataset.settlementNext,id=button.dataset.settlementId;
+    if(!confirm(`정산서를 ${settlementStatusLabel(next)} 상태로 변경할까요? (시연)`))return;
+    button.disabled=true;
+    const response=await apiClient.request(`/api/admin/settlements/${encodeURIComponent(id)}/transition`,{method:'POST',token:adminToken(),body:{status:next,version:Number(button.dataset.settlementVersion)}});
+    button.disabled=false;
+    if(!response.ok){alert((response.error&&response.error.message)||'상태를 변경하지 못했습니다.');handleAdminError(response);return}
+    adminSettlements=null;render();
+  });
+}
+
+async function createSettlementFromForm(){
+  const courseId=val('settlement-course'),from=val('settlement-from'),to=val('settlement-to'),status=val('settlement-status');
+  const button=document.querySelector('#create-settlement');
+  if(!courseId){alert('골프장을 선택해주세요.');return}
+  if(!from||!to){alert('정산 기간을 입력해주세요.');return}
+  if(button)button.disabled=true;
+  const response=await apiClient.request('/api/admin/settlements',{method:'POST',token:adminToken(),body:{courseId,from,to,status}});
+  if(button)button.disabled=false;
+  if(!response.ok){alert((response.error&&response.error.message)||'정산서를 만들지 못했습니다.');handleAdminError(response);return}
+  const settlement=response.data.settlement;
+  alert(`${settlement.number} 정산서를 만들었습니다.\n정산 기준액 ${money(settlement.basisAmount)} · 수수료 ${money(settlement.platformFee)} · 정산 예정 ${money(settlement.payoutAmount)} (시연)`);
+  adminSettlements=null;render();
+}
+
 function auditLabel(action){
-  return ({'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'본사 로그인','partner.login':'담당자 로그인','partner-account.created':'계정 생성','partner-account.updated':'계정 변경','partner-account.password-reset':'비밀번호 재설정','tee-time.created':'티타임 등록','tee-time.updated':'티타임 수정','tee-time.deleted':'티타임 삭제','tee-time.recurring':'티타임 반복 등록','rates.updated':'요금 수정','special-offer.created':'특가 등록','special-offer.updated':'특가 수정','special-offer.deleted':'특가 삭제','reservation.created':'예약 확정','reservation.cancelled':'예약 취소','reservation.status-updated':'예약 상태 변경'})[action]||action;
+  return ({'application.created':'신청 접수','application.approved':'승인','application.rejected':'반려','admin.login':'본사 로그인','partner.login':'담당자 로그인','partner-account.created':'계정 생성','partner-account.updated':'계정 변경','partner-account.password-reset':'비밀번호 재설정','tee-time.created':'티타임 등록','tee-time.updated':'티타임 수정','tee-time.deleted':'티타임 삭제','tee-time.recurring':'티타임 반복 등록','rates.updated':'요금 수정','special-offer.created':'특가 등록','special-offer.updated':'특가 수정','special-offer.deleted':'특가 삭제','reservation.created':'예약 확정','reservation.cancelled':'예약 취소','reservation.status-updated':'예약 상태 변경','commission.updated':'수수료율 변경','settlement.created':'정산서 생성','settlement.pending':'정산 확인 대기','settlement.confirmed':'정산 확정','settlement.paid':'정산 지급 완료'})[action]||action;
 }
 
 function render(){
   if(!loginState()){app.innerHTML=login();bindLogin();return}
   if(isServerMode()&&loginState()!=='server'){localStorage.removeItem(AUTH);app.innerHTML=login();bindLogin();return}
-  const views={dash,courses:courseDirectory,partners,applications,accounts:accountsPage,operations:operationsPage,audit,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};
+  const views={dash,courses:courseDirectory,partners,applications,accounts:accountsPage,operations:operationsPage,analytics:analyticsPage,audit,tees,reservations,waitlist,refunds,members,settlements,banners,inquiries,settings,transfer:()=>window.ALL_GOLF_DEMO_TRANSFER.view(shell)};
   app.innerHTML=(views[page]||dash)();
   bind();
   window.ALL_GOLF_NATIONAL_DASHBOARD.bind(render);

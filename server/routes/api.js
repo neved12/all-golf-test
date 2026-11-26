@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const path = require('path');
 const domain = require('../lib/domain');
 const operations = require('../lib/operations');
+const analytics = require('../lib/analytics');
 const accounts = require('../lib/accounts');
 const reservations = require('../lib/reservations');
 const http = require('../lib/http');
@@ -46,6 +47,15 @@ function createApi(options) {
   }
   function broadcastReservation(event, payload) {
     broadcast('reservations.changed', { event, ...(payload || {}), at: nowIso() });
+  }
+
+  /* 9단계: 예약·정산 이벤트를 시연용 알림 로그로 남긴다(실제 문자·푸시 아님). */
+  function recordReservationNotice(db, reservation, event) {
+    try {
+      analytics.notifyReservation(db, reservation, event);
+    } catch (error) {
+      console.error('[ALL:GOLF] 알림 로그 기록 실패:', error && error.message);
+    }
   }
 
   /* 예약 번호·연락처 조회와 취소 요청의 무차별 시도 제한(IP + 예약번호). */
@@ -217,8 +227,8 @@ function createApi(options) {
         ok: true,
         name: config.serverName,
         version: config.version,
-        stage: 8,
-        stages: [1, 2, 3, 4, 5, 6, 7, 8],
+        stage: 9,
+        stages: [1, 2, 3, 4, 5, 6, 7, 8, 9],
         time: nowIso(),
         uptimeSec: Math.round(process.uptime()),
         auth: { configured: !config.usingDefaultPassword, mode: config.usingDefaultPassword ? 'demo-default-password' : 'env', partnerAccounts: true },
@@ -239,6 +249,9 @@ function createApi(options) {
           confirmedReservations: (db.reservations || []).filter(item => item.status === 'confirmed').length,
           activeHolds: (db.bookingHolds || []).filter(item => item.status === 'active').length,
           auditLogs: db.auditLogs.length,
+          commissionRates: Object.keys(db.commissionRates || {}).length,
+          settlements: (db.settlements || []).length,
+          notificationLogs: (db.notificationLogs || []).length,
           revision: db.meta.revision || 0,
           updatedAt: db.meta.updatedAt || null
         },
@@ -256,9 +269,18 @@ function createApi(options) {
           holds: true,
           inventoryLinked: true,
           idempotency: true,
-          refunds: true
+          refunds: true,
+          analytics: true,
+          settlements: true,
+          commissions: true,
+          notifications: true
         },
         hold: { ttlSec: Math.round(config.holdTtlMs / 1000), maxPerSession: config.maxHoldsPerSession },
+        settlement: {
+          statuses: analytics.SETTLEMENT_STATUSES,
+          defaultCommissionPercent: analytics.DEFAULT_COMMISSION_PERCENT,
+          commissionRange: [analytics.COMMISSION_MIN_PERCENT, analytics.COMMISSION_MAX_PERCENT]
+        },
         dataMode: 'demo'
       });
       return;
@@ -444,6 +466,7 @@ function createApi(options) {
           actor: { type: 'customer', email: null, ip },
           memo: `${reservation.number} · ${reservation.people}명 · 예약금 ${reservation.paidDeposit}원`
         });
+        recordReservationNotice(db, reservation, 'reservation.confirmed');
         return { idempotent: false, reservation };
       });
       const reservation = result.reservation;
@@ -525,6 +548,7 @@ function createApi(options) {
             actor: { type: 'customer', email: null, ip },
             memo: `${reservation.number} · ${outcome.refund.refundRate}% 환불(수수료 ${outcome.refund.cancellationFee}원)`
           });
+          recordReservationNotice(db, reservation, 'reservation.cancelled');
         }
         return outcome;
       });
@@ -1196,6 +1220,7 @@ function createApi(options) {
             actor,
             memo: `${reservation.number} · ${reservations.statusLabel(nextStatus)} · ${reason || '관리자 처리'}`
           });
+          if (nextStatus === 'cancelled') recordReservationNotice(db, reservation, 'reservation.cancelled');
         }
         return outcome;
       });
@@ -1211,6 +1236,227 @@ function createApi(options) {
         inventoryLinked: true,
         dataMode: 'demo'
       });
+      return;
+    }
+
+    /* --- 9단계: 본사 운영 통계 · 제휴 성과 --------------------------------- */
+    if (pathname === '/api/admin/analytics' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const period = String(query.get('period') || analytics.DEFAULT_PERIOD);
+      const payload = analytics.analyticsFor(db, { period, courseId: String(query.get('courseId') || '') });
+      if (String(query.get('format') || '').toLowerCase() === 'csv') {
+        const csv = `\uFEFF${analytics.analyticsCsv(payload)}`;
+        const stamp = new Date().toISOString().slice(0, 10);
+        res.writeHead(200, http.baseHeaders({
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Length': Buffer.byteLength(csv),
+          'Content-Disposition': `attachment; filename="allgolf-analytics-${payload.period.key}-${stamp}.csv"`,
+          'Cache-Control': 'no-store'
+        }));
+        res.end(csv);
+        return;
+      }
+      http.sendJson(res, 200, payload);
+      return;
+    }
+
+    if (pathname === '/api/admin/commissions' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const courses = analytics.commissionList(db);
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        dataMode: 'demo',
+        defaultRatePercent: analytics.DEFAULT_COMMISSION_PERCENT,
+        minPercent: analytics.COMMISSION_MIN_PERCENT,
+        maxPercent: analytics.COMMISSION_MAX_PERCENT,
+        count: courses.length,
+        courses,
+        note: '수수료율은 골프장별로 0~30% 범위에서 설정합니다. 기본값은 8%이며 정산서 생성 시점의 수수료율이 정산서에 기록됩니다.'
+      });
+      return;
+    }
+
+    const commissionMatch = pathname.match(/^\/api\/admin\/commissions\/([^/]+)$/);
+    if (commissionMatch && (method === 'PUT' || method === 'PATCH')) {
+      const admin = requireAdmin(req);
+      const courseId = decodeURIComponent(commissionMatch[1]);
+      const body = await http.readJson(req);
+      const { result } = await store.update(db => {
+        const course = (db.approvedCourses || []).find(item => String(item.id) === String(courseId));
+        if (!course) throw new HttpError(404, 'course_not_found', '제휴 승인된 골프장을 찾을 수 없습니다.');
+        const current = analytics.commissionFor(db, courseId);
+        if (body.version != null && Number(body.version) !== Number(current.version)) {
+          throw new HttpError(409, 'version_conflict', '다른 곳에서 먼저 수수료율을 수정했습니다. 새로고침 후 다시 시도해주세요.', { current });
+        }
+        const checked = analytics.validateCommission(body);
+        if (!checked.ok) throw new HttpError(400, 'validation_failed', checked.message, { errors: checked.errors });
+        const at = nowIso();
+        db.commissionRates = db.commissionRates && typeof db.commissionRates === 'object' ? db.commissionRates : {};
+        db.commissionRates[String(courseId)] = {
+          courseId: String(courseId),
+          ratePercent: checked.value.ratePercent,
+          version: Number(current.version || 0) + 1,
+          updatedAt: at,
+          updatedBy: { type: 'admin', email: admin.payload.email },
+          dataMode: 'demo'
+        };
+        pushAudit(db, {
+          action: 'commission.updated',
+          actor: adminActor(req, admin.payload),
+          courseId: String(courseId),
+          courseName: course.name,
+          memo: `수수료율 ${current.ratePercent}% → ${checked.value.ratePercent}%`
+        });
+        return analytics.commissionFor(db, courseId);
+      });
+      broadcast('commissions.changed', { courseId: String(courseId), ratePercent: result.ratePercent, at: nowIso() });
+      http.sendJson(res, 200, { ok: true, mode: 'server', commission: result, dataMode: 'demo' });
+      return;
+    }
+
+    /* --- 9단계: 정산서 생성·상태 전이 -------------------------------------- */
+    if (pathname === '/api/admin/settlements' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const status = String(query.get('status') || '').toUpperCase();
+      const courseId = String(query.get('courseId') || '');
+      const from = String(query.get('from') || '');
+      const to = String(query.get('to') || '');
+      [from, to].filter(Boolean).forEach(value => {
+        if (!domain.isValidDate(value)) throw new HttpError(400, 'invalid_date', '날짜는 YYYY-MM-DD 형식이어야 합니다.');
+      });
+      let items = (db.settlements || []).slice();
+      if (status) items = items.filter(item => item.status === status);
+      if (courseId) items = items.filter(item => String(item.courseId) === courseId);
+      if (from) items = items.filter(item => item.period && item.period.to >= from);
+      if (to) items = items.filter(item => item.period && item.period.from <= to);
+      items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      const byStatus = {};
+      analytics.SETTLEMENT_STATUSES.forEach(key => { byStatus[key] = items.filter(item => item.status === key).length; });
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        dataMode: 'demo',
+        count: items.length,
+        byStatus,
+        statuses: analytics.SETTLEMENT_STATUSES.map(key => ({ status: key, label: analytics.SETTLEMENT_STATUS_LABELS[key] })),
+        totals: {
+          basisAmount: items.reduce((total, item) => total + Number(item.basisAmount || 0), 0),
+          platformFee: items.reduce((total, item) => total + Number(item.platformFee || 0), 0),
+          payoutAmount: items.reduce((total, item) => total + Number(item.payoutAmount || 0), 0),
+          paid: items.filter(item => item.status === 'PAID').reduce((total, item) => total + Number(item.payoutAmount || 0), 0)
+        },
+        settlements: items.map(item => analytics.settlementView(item)),
+        note: analytics.SIMULATION_NOTE
+      });
+      return;
+    }
+
+    if (pathname === '/api/admin/settlements/export' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const courseId = String(query.get('courseId') || '');
+      let items = (db.settlements || []).slice();
+      if (courseId) items = items.filter(item => String(item.courseId) === courseId);
+      items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      const csv = `\uFEFF${analytics.settlementsCsv(items)}`;
+      res.writeHead(200, http.baseHeaders({
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Length': Buffer.byteLength(csv),
+        'Content-Disposition': `attachment; filename="allgolf-settlements-${new Date().toISOString().slice(0, 10)}.csv"`,
+        'Cache-Control': 'no-store'
+      }));
+      res.end(csv);
+      return;
+    }
+
+    if (pathname === '/api/admin/settlements' && method === 'POST') {
+      const admin = requireAdmin(req);
+      const body = await http.readJson(req);
+      const { result } = await store.update(db => {
+        const outcome = analytics.createSettlement(db, {
+          courseId: body.courseId,
+          from: body.from,
+          to: body.to,
+          status: body.status,
+          note: domain.text(body.note).slice(0, 200),
+          actor: adminActor(req, admin.payload)
+        });
+        if (!outcome.ok) throw new HttpError(outcome.status || 400, outcome.code, outcome.message, outcome.details);
+        pushAudit(db, {
+          action: 'settlement.created',
+          actor: adminActor(req, admin.payload),
+          courseId: outcome.settlement.courseId,
+          courseName: outcome.settlement.courseName,
+          settlementId: outcome.settlement.id,
+          settlementNumber: outcome.settlement.number,
+          memo: `${outcome.settlement.number} · ${outcome.settlement.period.from}~${outcome.settlement.period.to} · 정산 예정 ${outcome.settlement.payoutAmount}원 · ${analytics.SETTLEMENT_STATUS_LABELS[outcome.settlement.status]}`
+        });
+        return outcome.settlement;
+      });
+      broadcast('settlements.changed', { event: 'created', settlementId: result.id, at: nowIso() });
+      http.sendJson(res, 201, { ok: true, mode: 'server', settlement: analytics.settlementView(result), dataMode: 'demo', note: analytics.SIMULATION_NOTE });
+      return;
+    }
+
+    const settlementTransitionMatch = pathname.match(/^\/api\/admin\/settlements\/([^/]+)\/transition$/);
+    if (settlementTransitionMatch && method === 'POST') {
+      const admin = requireAdmin(req);
+      const id = decodeURIComponent(settlementTransitionMatch[1]);
+      const body = await http.readJson(req);
+      const { result } = await store.update(db => {
+        const settlement = (db.settlements || []).find(item => String(item.id) === id || String(item.number) === id);
+        if (!settlement) throw new HttpError(404, 'settlement_not_found', '정산서를 찾을 수 없습니다.');
+        if (body.version != null && Number(body.version) !== Number(settlement.version)) {
+          throw new HttpError(409, 'version_conflict', '다른 곳에서 먼저 변경했습니다. 새로고침 후 다시 시도해주세요.', { current: analytics.settlementView(settlement) });
+        }
+        const outcome = analytics.transitionSettlement(settlement, body.status, {
+          actor: adminActor(req, admin.payload),
+          note: domain.text(body.note).slice(0, 200)
+        });
+        if (!outcome.ok) throw new HttpError(outcome.status || 409, outcome.code, outcome.message, outcome.details);
+        pushAudit(db, {
+          action: `settlement.${settlement.status.toLowerCase()}`,
+          actor: adminActor(req, admin.payload),
+          courseId: settlement.courseId,
+          courseName: settlement.courseName,
+          settlementId: settlement.id,
+          settlementNumber: settlement.number,
+          memo: `${settlement.number} · ${analytics.SETTLEMENT_STATUS_LABELS[settlement.status]} · ${settlement.period.from}~${settlement.period.to} · ${settlement.payoutAmount}원`
+        });
+        if (settlement.status === 'CONFIRMED' || settlement.status === 'PAID') {
+          try { analytics.notifySettlement(db, settlement, settlement.status); } catch (error) { console.error('[ALL:GOLF] 정산 알림 기록 실패:', error && error.message); }
+        }
+        return settlement;
+      });
+      broadcast('settlements.changed', { event: result.status.toLowerCase(), settlementId: result.id, at: nowIso() });
+      http.sendJson(res, 200, { ok: true, mode: 'server', settlement: analytics.settlementView(result), dataMode: 'demo', note: analytics.SIMULATION_NOTE });
+      return;
+    }
+
+    const adminSettlementMatch = pathname.match(/^\/api\/admin\/settlements\/([^/]+)$/);
+    if (adminSettlementMatch && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      const id = decodeURIComponent(adminSettlementMatch[1]);
+      const settlement = (db.settlements || []).find(item => String(item.id) === id || String(item.number) === id);
+      if (!settlement) throw new HttpError(404, 'settlement_not_found', '정산서를 찾을 수 없습니다.');
+      http.sendJson(res, 200, { ok: true, mode: 'server', settlement: analytics.settlementView(settlement), dataMode: 'demo', note: analytics.SIMULATION_NOTE });
+      return;
+    }
+
+    /* --- 9단계: 운영 알림 시뮬레이션 로그(본사) ---------------------------- */
+    if (pathname === '/api/admin/notifications' && method === 'GET') {
+      requireAdmin(req);
+      const db = store.read();
+      http.sendJson(res, 200, analytics.notificationsFor(db, {
+        courseId: String(query.get('courseId') || ''),
+        event: String(query.get('event') || ''),
+        limit: query.get('limit')
+      }));
       return;
     }
 
@@ -1342,6 +1588,19 @@ function createApi(options) {
           linked: true,
           activeHolds: (db.bookingHolds || []).filter(hold => String(hold.courseId) === courseId && hold.status === 'active').length
         },
+        /* 9단계: 본인 골프장 정산·수수료 요약(조회 전용) */
+        settlement: (() => {
+          const items = (db.settlements || []).filter(item => String(item.courseId) === courseId);
+          const commission = analytics.commissionFor(db, courseId);
+          return {
+            commissionRatePercent: commission.ratePercent,
+            commissionSource: commission.source,
+            count: items.length,
+            confirmed: items.filter(item => item.status === 'CONFIRMED').length,
+            paid: items.filter(item => item.status === 'PAID').length,
+            payoutAmount: items.filter(item => ['CONFIRMED', 'PAID'].includes(item.status)).reduce((total, item) => total + Number(item.payoutAmount || 0), 0)
+          };
+        })(),
         lastUpdated: stamps.length ? stamps[stamps.length - 1] : null,
         serverTime: nowIso(),
         dataMode: 'demo'
@@ -1891,6 +2150,7 @@ function createApi(options) {
             actor,
             memo: `${reservation.number} · ${reservations.statusLabel(nextStatus)}${reason ? ` · ${reason}` : ''}`
           });
+          if (nextStatus === 'cancelled') recordReservationNotice(db, reservation, 'reservation.cancelled');
         }
         return outcome;
       });
@@ -1909,10 +2169,97 @@ function createApi(options) {
       return;
     }
 
+    /* --- 9단계: 골프장 담당자 정산·수수료·알림(본인 골프장만) --------------- */
+    if (pathname === '/api/partner/settlements' && method === 'GET') {
+      const session = partnerSession(req);
+      assertOwnCourse(query.get('courseId'), session.account);
+      const db = session.db;
+      const courseId = String(session.account.courseId);
+      const status = String(query.get('status') || '').toUpperCase();
+      let items = (db.settlements || []).filter(item => String(item.courseId) === courseId);
+      if (status) items = items.filter(item => item.status === status);
+      items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      const commission = analytics.commissionFor(db, courseId);
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        dataMode: 'demo',
+        courseId,
+        courseName: session.course.name,
+        count: items.length,
+        commission: {
+          ratePercent: commission.ratePercent,
+          source: commission.source,
+          defaultRatePercent: analytics.DEFAULT_COMMISSION_PERCENT,
+          updatedAt: commission.updatedAt,
+          note: '본사가 설정한 골프장별 수수료율입니다. 정산 기준액 × 수수료율이 플랫폼 수수료입니다.'
+        },
+        totals: {
+          basisAmount: items.reduce((total, item) => total + Number(item.basisAmount || 0), 0),
+          platformFee: items.reduce((total, item) => total + Number(item.platformFee || 0), 0),
+          payoutAmount: items.reduce((total, item) => total + Number(item.payoutAmount || 0), 0),
+          paid: items.filter(item => item.status === 'PAID').reduce((total, item) => total + Number(item.payoutAmount || 0), 0)
+        },
+        settlements: items.map(item => analytics.settlementView(item)),
+        note: '조회 전용입니다. 정산서 생성·확정·지급 처리는 본사 관리자만 할 수 있습니다. ' + analytics.SIMULATION_NOTE
+      });
+      return;
+    }
+
+    if (pathname === '/api/partner/settlements' && method === 'POST') {
+      partnerSession(req);
+      throw new HttpError(403, 'forbidden_role', '정산서 생성은 본사 관리자만 할 수 있습니다. 정산 내역은 조회만 가능합니다.');
+    }
+
+    const partnerSettlementTransitionMatch = pathname.match(/^\/api\/partner\/settlements\/([^/]+)\/transition$/);
+    if (partnerSettlementTransitionMatch && method === 'POST') {
+      partnerSession(req);
+      throw new HttpError(403, 'forbidden_role', '정산서 상태 변경은 본사 관리자만 할 수 있습니다.');
+    }
+
+    const partnerSettlementMatch = pathname.match(/^\/api\/partner\/settlements\/([^/]+)$/);
+    if (partnerSettlementMatch && method === 'GET') {
+      const session = partnerSession(req);
+      const id = decodeURIComponent(partnerSettlementMatch[1]);
+      const settlement = (session.db.settlements || []).find(item => String(item.id) === id || String(item.number) === id);
+      if (!settlement) throw new HttpError(404, 'settlement_not_found', '정산서를 찾을 수 없습니다.');
+      if (String(settlement.courseId) !== String(session.account.courseId)) {
+        throw new HttpError(403, 'forbidden_course', '다른 골프장의 정산서는 조회할 수 없습니다.');
+      }
+      http.sendJson(res, 200, { ok: true, mode: 'server', settlement: analytics.settlementView(settlement), dataMode: 'demo', note: analytics.SIMULATION_NOTE });
+      return;
+    }
+
+    if (pathname === '/api/partner/commission' && method === 'GET') {
+      const session = partnerSession(req);
+      assertOwnCourse(query.get('courseId'), session.account);
+      const commission = analytics.commissionFor(session.db, session.account.courseId);
+      http.sendJson(res, 200, {
+        ok: true,
+        mode: 'server',
+        commission,
+        defaultRatePercent: analytics.DEFAULT_COMMISSION_PERCENT,
+        dataMode: 'demo'
+      });
+      return;
+    }
+
+    if (pathname === '/api/partner/notifications' && method === 'GET') {
+      const session = partnerSession(req);
+      assertOwnCourse(query.get('courseId'), session.account);
+      const payload = analytics.notificationsFor(session.db, {
+        courseId: String(session.account.courseId),
+        event: String(query.get('event') || ''),
+        limit: query.get('limit')
+      });
+      http.sendJson(res, 200, { ...payload, courseId: String(session.account.courseId) });
+      return;
+    }
+
     if (pathname === '/api/events' && method === 'GET') {
       const client = http.openSse(res);
       sseClients.add(client);
-      client.send('hello', { at: nowIso(), mode: 'server', stage: 8 });
+      client.send('hello', { at: nowIso(), mode: 'server', stage: 9 });
       const ping = setInterval(() => client.ping(), 15000);
       if (ping.unref) ping.unref();
       req.on('close', () => {

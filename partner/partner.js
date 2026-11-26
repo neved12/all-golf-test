@@ -313,7 +313,7 @@ let serverSession=null,serverData={},serverLoadingKey='',serverBooted=false,serv
 const partnerToken=()=>apiClient&&apiClient.getPartnerToken?apiClient.getPartnerToken():'';
 const serverCourse=()=>serverSession&&serverSession.course?serverSession.course:null;
 const serverAccount=()=>serverSession&&serverSession.account?serverSession.account:null;
-const serverMenu=()=>[['dashboard','운영 현황'],['tees','티타임 관리'],['bookings','예약 관리'],['rates','요금 설정'],['deals','특가 관리'],['course','골프장 정보'],['apply','제휴 신청'],['status','접수 상태']];
+const serverMenu=()=>[['dashboard','운영 현황'],['tees','티타임 관리'],['bookings','예약 관리'],['rates','요금 설정'],['deals','특가 관리'],['settlements','정산 내역'],['notifications','알림 로그'],['course','골프장 정보'],['apply','제휴 신청'],['status','접수 상태']];
 const serverMeta=()=>`<div class="server-meta"><span class="mode-chip server">서버 연동</span><small>마지막 갱신 ${esc(serverLastRefresh||'-')}</small></div>`;
 const invalidateServer=()=>{serverData={};serverLoadingKey=''};
 
@@ -361,7 +361,7 @@ function serverKey(){
   return view;
 }
 function serverTitle(){
-  return ({dashboard:'운영 현황',tees:'티타임 관리',bookings:'예약 현황',rates:'요금 설정',deals:'특가 관리',course:'골프장 정보'})[view]||'운영 현황';
+  return ({dashboard:'운영 현황',tees:'티타임 관리',bookings:'예약 현황',rates:'요금 설정',deals:'특가 관리',settlements:'정산 내역',notifications:'알림 로그',course:'골프장 정보'})[view]||'운영 현황';
 }
 function loadingPanel(){return '<section class="panel"><div class="notice">서버에서 불러오는 중…</div></section>'}
 function errorPanel(message){return `<section class="panel"><div class="form-error">${esc(message||'불러오지 못했습니다.')}</div><div class="btn-row"><button class="secondary" id="server-retry">다시 시도</button></div></section>`}
@@ -396,6 +396,14 @@ async function loadServerData(key){
     const response=await partnerRequest('/api/partner/dashboard');
     if(!response.ok)throw new Error((response.error&&response.error.message)||'골프장 정보를 불러오지 못했습니다.');
     serverData[key]={dash:response.data};
+  }else if(target==='settlements'){
+    const response=await partnerRequest('/api/partner/settlements');
+    if(!response.ok)throw new Error((response.error&&response.error.message)||'정산 내역을 불러오지 못했습니다.');
+    serverData[key]=response.data;
+  }else if(target==='notifications'){
+    const response=await partnerRequest('/api/partner/notifications?limit=100');
+    if(!response.ok)throw new Error((response.error&&response.error.message)||'알림 로그를 불러오지 못했습니다.');
+    serverData[key]=response.data;
   }else{
     serverData[key]={};
   }
@@ -440,6 +448,8 @@ function serverBody(data){
   if(view==='deals')return serverDealsView(data);
   if(view==='rates')return serverRatesView(data);
   if(view==='bookings')return serverBookingsView(data);
+  if(view==='settlements')return serverSettlementsView(data);
+  if(view==='notifications')return serverNotificationsView(data);
   if(view==='course')return serverCourseView(data);
   return serverDashboardView(data);
 }
@@ -465,8 +475,8 @@ function bindServerView(data){
 }
 function serverDashboardView(data){
   const dash=data.dash||{},times=data.teeTimes||[],today=selectedDate||todayISO();
-  const cards=[['등록 티타임',`${dash.teeTimes?dash.teeTimes.total:0}개`],['선택일 티타임',`${times.length}개`],['선택일 예약',`${dash.reservations&&dash.reservations.today!=null?dash.reservations.today:0}건`],['확정 예약',`${dash.reservations?dash.reservations.count:0}건`],['판매 중 특가',`${dash.offers?dash.offers.active:0}개`]];
-  return `<section class="dashboard-date"><label>운영 날짜 <input class="date-picker" type="date" value="${today}" data-date-change></label><span>서버 DB 기준 · 예약 재고는 서버 예약·임시확보로 공유됩니다.</span></section><section class="stats simple-stats">${cards.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><section class="panel"><div class="panel-head"><div><h2>${esc(dash.course?dash.course.name:'')} 운영 현황</h2><p>서버에 저장된 티타임·특가를 불러왔습니다. 마지막 갱신 ${esc(serverLastRefresh)}</p></div><div class="btn-row"><button class="secondary" id="server-refresh">새로고침</button><button class="primary" data-view="tees">티타임 관리</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>그린피</th><th>예약 가능</th><th>상태</th><th>관리</th></tr></thead><tbody>${times.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${money(tee.greenFee)}</td><td>${tee.remaining}/${tee.capacityTeams}팀</td><td><span class="badge ${tee.status==='open'?'active':tee.status==='stopped'?'paused':'closed'}">${esc(tee.statusLabel)}</span></td><td><button class="secondary" data-server-edit-tee="${esc(tee.id)}">수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">이 날짜에 등록된 티타임이 없습니다. ‘티타임 관리’에서 추가하세요.</td></tr>'}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><h2>예약 현황</h2><p>${esc(dash.reservations?dash.reservations.note:'')}</p></div><button class="secondary" data-view="bookings">예약 관리</button></div><div class="notice">${esc(dash.reservations?dash.reservations.note:'')}</div></section>`;
+  const cards=[['등록 티타임',`${dash.teeTimes?dash.teeTimes.total:0}개`],['선택일 티타임',`${times.length}개`],['선택일 예약',`${dash.reservations&&dash.reservations.today!=null?dash.reservations.today:0}건`],['확정 예약',`${dash.reservations?dash.reservations.count:0}건`],['판매 중 특가',`${dash.offers?dash.offers.active:0}개`],['수수료율',`${dash.settlement?Number(dash.settlement.commissionRatePercent||0):0}%`]];
+  return `<section class="dashboard-date"><label>운영 날짜 <input class="date-picker" type="date" value="${today}" data-date-change></label><span>서버 DB 기준 · 예약 재고는 서버 예약·임시확보로 공유됩니다.</span></section><section class="stats simple-stats">${cards.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section><section class="panel"><div class="panel-head"><div><h2>${esc(dash.course?dash.course.name:'')} 운영 현황</h2><p>서버에 저장된 티타임·특가를 불러왔습니다. 마지막 갱신 ${esc(serverLastRefresh)}</p></div><div class="btn-row"><button class="secondary" id="server-refresh">새로고침</button><button class="secondary" data-view="settlements">정산 내역</button><button class="primary" data-view="tees">티타임 관리</button></div></div><div class="table-wrap"><table class="table"><thead><tr><th>시간</th><th>코스</th><th>부</th><th>그린피</th><th>예약 가능</th><th>상태</th><th>관리</th></tr></thead><tbody>${times.map(tee=>`<tr><td><b>${esc(tee.time)}</b></td><td>${esc(tee.course||'전체')}</td><td>${esc(tee.session)}</td><td>${money(tee.greenFee)}</td><td>${tee.remaining}/${tee.capacityTeams}팀</td><td><span class="badge ${tee.status==='open'?'active':tee.status==='stopped'?'paused':'closed'}">${esc(tee.statusLabel)}</span></td><td><button class="secondary" data-server-edit-tee="${esc(tee.id)}">수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">이 날짜에 등록된 티타임이 없습니다. ‘티타임 관리’에서 추가하세요.</td></tr>'}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><h2>예약 현황</h2><p>${esc(dash.reservations?dash.reservations.note:'')}</p></div><button class="secondary" data-view="bookings">예약 관리</button></div><div class="notice">${esc(dash.reservations?dash.reservations.note:'')}</div></section>`;
 }
 function serverTeesView(data){
   const items=data.teeTimes||[];
@@ -519,6 +529,24 @@ function serverCourseView(data){
   return `<section class="panel"><div class="panel-head"><div><h2>골프장 정보</h2><p>제휴 승인 정보와 서버 계정입니다.</p></div><span class="mode-chip server">서버 연동</span></div><div class="master-box"><h3>제휴 승인 정보</h3><dl><div><dt>골프장명</dt><dd>${esc(course.name||master.name||'-')}</dd></div><div><dt>지역</dt><dd>${esc(course.region||master.region||'')} ${esc(course.city||master.city||'')}</dd></div><div><dt>주소</dt><dd>${esc(course.address||master.address||'확인 필요')}</dd></div><div><dt>운영형태</dt><dd>${operationLabel(course.operationType||master.operationType)}</dd></div><div><dt>홀 수</dt><dd>${course.holes||master.holes?`${course.holes||master.holes}홀`:'확인 필요'}</dd></div><div><dt>대표 전화</dt><dd>${esc(course.phone||master.phone||'확인 필요')}</dd></div></dl></div><h3 class="subhead">로그인 계정</h3><div class="master-box"><dl><div><dt>담당자</dt><dd>${esc(account.name||'-')}</dd></div><div><dt>이메일</dt><dd>${esc(account.email||'-')}</dd></div><div><dt>권한</dt><dd>${esc(account.roleLabel||'-')}</dd></div><div><dt>상태</dt><dd>${esc(account.statusLabel||'-')}</dd></div><div><dt>마지막 로그인</dt><dd>${esc(String(account.lastLoginAt||'-').slice(0,16).replace('T',' '))}</dd></div></dl></div><p class="notice">계정 추가·비활성화는 본사 관리자만 할 수 있습니다. 승인 정보 수정은 다음 단계에서 지원할 예정입니다.</p></section>`;
 }
 const serverNum=id=>{const value=val(id).trim();return value===''?null:Number(value)};
+/* --- 9단계: 정산 내역·알림 로그 (조회 전용) ------------------------------ */
+const serverSettlementLabel=status=>({DRAFT:'작성 중',PENDING:'확인 대기',CONFIRMED:'확정',PAID:'지급 완료'})[status]||status;
+const serverSettlementClass=status=>status==='PAID'?'approved':status==='CONFIRMED'?'active':status==='PENDING'?'warn':'closed';
+function serverSettlementsView(data){
+  const commission=data.commission||{},totals=data.totals||{},items=data.settlements||[];
+  const cards=[['수수료율',`${Number(commission.ratePercent||0)}%`],['정산 기준액',money(totals.basisAmount)],['플랫폼 수수료',money(totals.platformFee)],['정산 예정액',money(totals.payoutAmount)],['지급 완료',money(totals.paid)]];
+  return `<section class="notice">본인 골프장의 정산 내역과 수수료 상세만 표시됩니다. 정산서 생성·확정·지급은 본사 관리자만 처리합니다. 실제 계좌 이체는 없는 시연용 기록입니다.</section>
+  <section class="stats simple-stats">${cards.map(([label,value])=>`<article class="stat"><small>${label}</small><strong>${value}</strong></article>`).join('')}</section>
+  <section class="panel"><div class="panel-head"><div><h2>${esc(data.courseName||'')} 정산 내역</h2><p>수수료율 ${Number(commission.ratePercent||0)}% (${commission.source==='default'?'기본값':'본사 설정'}) · 정산 기준액 = GMV + 취소 수수료</p></div><button class="secondary" id="server-refresh">새로고침</button></div>
+  <div class="table-wrap"><table class="table"><thead><tr><th>정산번호</th><th>기간</th><th>상태</th><th>수수료율</th><th>예약</th><th>GMV</th><th>취소 수수료</th><th>정산 기준액</th><th>플랫폼 수수료</th><th>정산 예정액</th></tr></thead><tbody>${items.map(item=>`<tr><td><b>${esc(item.number)}</b><small class="demo-cell">${esc(String(item.createdAt||'').slice(0,10))}</small></td><td>${esc((item.period&&item.period.from)||'')}~${esc((item.period&&item.period.to)||'')}</td><td><span class="badge ${serverSettlementClass(item.status)}">${esc(serverSettlementLabel(item.status))}</span></td><td>${Number(item.commissionRatePercent||0)}%</td><td>${item.reservations}건</td><td>${money(item.grossAmount)}</td><td>${money(item.cancellationFee)}</td><td>${money(item.basisAmount)}</td><td>${money(item.platformFee)}</td><td><b>${money(item.payoutAmount)}</b></td></tr>`).join('')||'<tr><td colspan="10" class="empty">아직 발급된 정산서가 없습니다. 본사에서 정산서를 생성하면 이 화면에 표시됩니다.</td></tr>'}</tbody></table></div>
+  <p class="notice">${esc(data.note||'')}</p></section>`;
+}
+function serverNotificationsView(data){
+  const items=data.notifications||[];
+  return `<section class="notice">예약 확정·취소·정산 확정 시 서버 DB 에 남기는 <b>시연용 알림 로그</b>입니다. 실제 문자·푸시 발송은 없습니다. 본인 골프장 관련 기록만 표시됩니다.</section>
+  <section class="panel"><div class="panel-head"><div><h2>운영 알림 로그</h2><p>최근 ${items.length}건 · 수신 대상·채널·제목·시각·상태</p></div><button class="secondary" id="server-refresh">새로고침</button></div>
+  <div class="table-wrap"><table class="table"><thead><tr><th>시각</th><th>이벤트</th><th>채널</th><th>수신 대상</th><th>제목</th><th>요약</th><th>상태</th></tr></thead><tbody>${items.map(item=>`<tr><td>${esc(String(item.at||'').slice(0,16).replace('T',' '))}</td><td>${esc(item.eventLabel||item.event)}</td><td>${esc(item.channelLabel||item.channel)}</td><td>${esc((item.recipient&&(item.recipient.name||item.recipient.type))||'-')}<small class="demo-cell">${esc((item.recipient&&item.recipient.phone)||'')}</small></td><td>${esc(item.subject||'')}</td><td>${esc(item.summary||'')}</td><td><span class="badge warn">${esc(item.statusLabel||'시연 발송 기록')}</span></td></tr>`).join('')||'<tr><td colspan="7" class="empty">아직 기록된 알림이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+}
 function invalidateOnError(response){
   if(!response||!response.status)return;
   if(response.status===401){serverSession=null;if(apiClient.clearPartnerToken)apiClient.clearPartnerToken();alert((response.error&&response.error.message)||'로그인이 만료되었습니다. 다시 로그인해주세요.');render();return}

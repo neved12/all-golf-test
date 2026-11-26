@@ -365,6 +365,20 @@ async function main() {
     const inventoryAfterCancel = await api('GET', `/api/public/inventory?date=${iso}&courseId=${encodeURIComponent(courseId)}`);
     eq('취소 후 잔여 팀 복구', inventoryAfterCancel.data.courses[0].teeTimes[0].remaining, 2);
 
+    /* 9단계: 정산서를 만들고 파트너 화면에서 정산·알림 로그를 확인한다. */
+    const settlementForUi = await api('POST', '/api/admin/settlements', adminToken, { courseId, from: iso, to: iso });
+    eq('화면 검증용 정산서 생성', settlementForUi.status, 201);
+    const settlementNumberForUi = settlementForUi.data.settlement.number;
+    dom.document.querySelector('[data-view="settlements"]').click();
+    await sleep(1200);
+    ok('파트너 정산 내역 화면 렌더', domText(dom).includes('정산 내역') && domText(dom).includes('수수료율'), domText(dom).slice(0, 220));
+    ok('파트너 정산서 번호 표시', domText(dom).includes(settlementNumberForUi), domText(dom).slice(0, 300));
+    ok('파트너 정산 상태 · 조회 전용 안내', domText(dom).includes('작성 중') && domText(dom).includes('본사 관리자만'), domText(dom).slice(0, 300));
+    dom.document.querySelector('[data-view="notifications"]').click();
+    await sleep(1200);
+    ok('파트너 알림 로그 화면 렌더', domText(dom).includes('운영 알림 로그') && domText(dom).includes('시연용 알림 로그'), domText(dom).slice(0, 260));
+    ok('파트너 알림에 예약 확정 기록', domText(dom).includes('예약 확정 알림') && domText(dom).includes('시연 발송 기록'), domText(dom).slice(0, 320));
+
     dom.document.querySelector('#logout').click();
     await sleep(600);
     ok('로그아웃 후 로그인 화면', domText(dom).includes('골프장 관리자 로그인'));
@@ -444,7 +458,85 @@ async function main() {
     ok('감사 로그에 티타임 등록 기록', domText(adminDom).includes('티타임 등록'));
     ok('감사 로그에 예약 확정 기록', domText(adminDom).includes('예약 확정'), domText(adminDom).slice(0, 200));
     ok('감사 로그에 예약 취소 기록', domText(adminDom).includes('예약 취소'));
-    ok('스모크 중 예기치 않은 alert 없음', alerts.filter(message => !message.includes('건 등록') && !message.includes('저장되었습니다') && !message.includes('예약을 취소했습니다')).length === 0, alerts.join(' | '));
+
+    /* 9단계: 운영 통계·제휴 성과 화면 */
+    adminDom.document.querySelector('[data-page="analytics"]').click();
+    await sleep(1600);
+    ok('운영 통계 화면 렌더', domText(adminDom).includes('운영 통계·제휴 성과') && domText(adminDom).includes('기간별 운영 통계'), domText(adminDom).slice(0, 240));
+    ok('통계 KPI(GMV·노쇼율) 표시', domText(adminDom).includes('GMV') && domText(adminDom).includes('노쇼율'), domText(adminDom).slice(0, 300));
+    ok('통계에 골프장·수수료율 표시', domText(adminDom).includes('UI 스모크 CC') && domText(adminDom).includes('8%'), domText(adminDom).slice(0, 400));
+    ok('제휴 성과(승인 전환율) 표시', domText(adminDom).includes('승인 전환율') && domText(adminDom).includes('제휴 신청'));
+    adminDom.document.querySelector('[data-analytics-period="today"]').click();
+    await sleep(1600);
+    ok('기간(오늘) 전환 후 통계 유지', domText(adminDom).includes('기간별 운영 통계') && domText(adminDom).includes('GMV'), domText(adminDom).slice(0, 260));
+
+    /* 9단계: 정산·수수료 관리 화면 */
+    adminDom.document.querySelector('[data-page="settlements"]').click();
+    await sleep(1800);
+    ok('정산·수수료 관리 화면 렌더', domText(adminDom).includes('정산서 생성·상태 전이') && domText(adminDom).includes('골프장별 수수료율'), domText(adminDom).slice(0, 260));
+    ok('정산 목록에 기존 정산서 표시', domText(adminDom).includes(settlementNumberForUi) && domText(adminDom).includes('작성 중'), domText(adminDom).slice(0, 400));
+    const rateField = adminDom.document.querySelector(`#rate-${courseId}`);
+    ok('수수료율 입력란 표시', Boolean(rateField));
+    if (rateField) rateField.value = '9';
+    adminDom.document.querySelector(`[data-rate-save="${courseId}"]`)?.click();
+    await sleep(1400);
+    const commissionAfterUi = await api('GET', '/api/admin/commissions', adminToken);
+    const commissionRowUi = (commissionAfterUi.data.courses || []).find(item => item.courseId === courseId);
+    eq('화면에서 저장한 수수료율 9% 반영', commissionRowUi && commissionRowUi.ratePercent, 9);
+    adminDom.document.querySelector('#settlement-from').value = '2026-01-01';
+    adminDom.document.querySelector('#settlement-to').value = '2026-01-31';
+    adminDom.document.querySelector('#create-settlement').click();
+    await sleep(1600);
+    const settlementsAfterUi = await api('GET', '/api/admin/settlements', adminToken);
+    const createdByUi = (settlementsAfterUi.data.settlements || []).find(item => item.period.from === '2026-01-01' && item.period.to === '2026-01-31');
+    ok('화면에서 정산서 생성', Boolean(createdByUi), JSON.stringify((settlementsAfterUi.data.settlements || []).map(item => item.number)));
+    ok('생성 알림 문구 표시', alerts.some(message => message.includes('정산서를 만들었습니다')), alerts.join(' | '));
+    const pendingButton = adminDom.document.querySelector('[data-settlement-next="PENDING"]');
+    if (pendingButton) pendingButton.click();
+    await sleep(1500);
+    const pendingSettlements = await api('GET', '/api/admin/settlements?status=PENDING', adminToken);
+    ok('화면에서 DRAFT→PENDING 전이', (pendingSettlements.data.settlements || []).length >= 1, JSON.stringify(pendingSettlements.data.byStatus || {}));
+    ok('스모크 중 예기치 않은 alert 없음', alerts.filter(message => !message.includes('건 등록') && !message.includes('저장되었습니다') && !message.includes('예약을 취소했습니다') && !message.includes('수수료율이') && !message.includes('정산서를 만들었습니다')).length === 0, alerts.join(' | '));
+
+    /* --- 정적 모드(서버 없음): 9단계 화면도 요청 0건 ------------------------ */
+    section('화면 스모크 · 정적 모드 9단계 페이지(API 요청 0건)');
+    const staticDom = createDom('admin-app');
+    const staticCalls = { count: 0 };
+    const staticBox = {
+      document: staticDom.document,
+      location: { search: '', href: 'https://neved12.github.io/all-golf-test/admin/', origin: 'https://neved12.github.io', protocol: 'https:', hash: '', reload() {} },
+      navigator: { userAgent: 'node-smoke' },
+      localStorage: makeStorage(), sessionStorage: makeStorage(),
+      fetch: () => { staticCalls.count += 1; return Promise.reject(new Error('no network')); },
+      URLSearchParams, URL, AbortController,
+      setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
+      console, alert: message => { alerts.push(String(message)); }, confirm: () => false, prompt: () => '',
+      CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
+      EventSource: undefined,
+      scrollTo() {}
+    };
+    staticBox.window = staticBox;
+    staticBox.self = staticBox;
+    staticBox.window.__listeners = {};
+    staticBox.window.dispatchEvent = event => { (staticBox.window.__listeners[event.type] || []).forEach(handler => handler(event)); };
+    staticBox.window.addEventListener = (type, handler) => { (staticBox.window.__listeners[type] = staticBox.window.__listeners[type] || []).push(handler); };
+    staticBox.window.removeEventListener = () => {};
+    staticBox.localStorage.setItem('allGolfAdminAuth', 'true');
+    vm.createContext(staticBox);
+    loadScripts(staticBox, [
+      'data/national-golf-courses.js', 'data/golf-courses.js', 'data/demo-teetimes.js',
+      'data/partner-application.js', 'data/shared-store.js', 'admin/national-dashboard.js', 'demo-transfer.js',
+      'data/api-client.js', 'data/partner-sync.js', 'admin/admin.js'
+    ]);
+    await sleep(700);
+    ok('정적 모드 관리자 화면 렌더', domText(staticDom).includes('전국 운영 대시보드') && domText(staticDom).includes('정적 시연'), domText(staticDom).slice(0, 160));
+    staticDom.document.querySelector('[data-page="analytics"]').click();
+    await sleep(400);
+    ok('정적 모드 운영 통계 안내', domText(staticDom).includes('정적 시연 모드에서는 서버 운영 통계가 없습니다'), domText(staticDom).slice(-260));
+    staticDom.document.querySelector('[data-page="settlements"]').click();
+    await sleep(400);
+    ok('정적 모드 정산 화면 안내', domText(staticDom).includes('정적 시연 모드의 예시 표'), domText(staticDom).slice(-260));
+    eq('정적 모드에서 API 요청 0건', staticCalls.count, 0);
   } finally {
     await stopServer(server);
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
