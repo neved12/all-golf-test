@@ -159,7 +159,7 @@ async function main() {
     ok('수수료율 범위 0~30 공개', JSON.stringify(health.settlement.commissionRange) === JSON.stringify([0, 30]), JSON.stringify(health.settlement.commissionRange));
     eq('정산 상태 4단계 공개', (health.settlement.statuses || []).join(','), 'DRAFT,PENDING,CONFIRMED,PAID');
     const home = await call('GET', '/');
-    ok('정적 자산 9단계 캐시 버전', home.text.includes('v=20261126-stage9'));
+    ok('정적 자산 9단계 캐시 버전', /v=20261126-(stage9b|national)/.test(home.text));
 
     /* 2. 준비: 골프장 A/B 승인·계정·티타임·요금 ---------------------------- */
     section('9단계 · 준비: 골프장 A/B·요금·티타임');

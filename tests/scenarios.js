@@ -295,7 +295,7 @@
     ok('제휴 신청 저장소 로드', Boolean(api));
     if (!api) return;
     ok('기본 제휴 골프장 68곳 유지', api.defaultPartnerIds().length === 68, api.defaultPartnerIds().length);
-    ok('비제휴 골프장 176곳 신청 대상', api.availableCourses().length === 176, api.availableCourses().length);
+    ok('비제휴 골프장 전체가 신청 대상', api.availableCourses().length === courses.length - 68, `${api.availableCourses().length} / 전체 ${courses.length}`);
     const target = api.availableCourses()[0];
     ok('비제휴 골프장은 제휴 아님', Boolean(target) && !api.isPartnerCourse(target.id), target?.name);
     ok('비제휴 골프장은 시연 예약 불가', courses.find(item => item.id === target.id)?.bookable === false);
