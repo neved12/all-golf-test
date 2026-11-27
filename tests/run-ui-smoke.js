@@ -38,6 +38,8 @@ function parseAttrs(text) {
 
 function makeClassList(element) {
   const set = new Set();
+  /* HTML 의 class 속성도 실제 브라우저처럼 classList 에 반영한다(선택자 검사용). */
+  String((element.attrs && element.attrs.class) || '').split(/\s+/).filter(Boolean).forEach(name => set.add(name));
   return {
     add: name => set.add(name),
     remove: name => set.delete(name),
@@ -498,6 +500,120 @@ async function main() {
     ok('화면에서 DRAFT→PENDING 전이', (pendingSettlements.data.settlements || []).length >= 1, JSON.stringify(pendingSettlements.data.byStatus || {}));
     ok('스모크 중 예기치 않은 alert 없음', alerts.filter(message => !message.includes('건 등록') && !message.includes('저장되었습니다') && !message.includes('예약을 취소했습니다') && !message.includes('수수료율이') && !message.includes('정산서를 만들었습니다')).length === 0, alerts.join(' | '));
 
+    /* --- 10단계: 시연 허브(서버 연동) ---------------------------------------- */
+    section('화면 스모크 · 10단계 시연 허브(서버 연동)');
+    const hubHtml = (() => {
+      const html = fs.readFileSync(path.join(rootDir, 'demo', 'index.html'), 'utf8');
+      const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+      return body ? body[1].replace(/<script[\s\S]*?<\/script>/gi, '') : '';
+    })();
+    const hubDom = createDom('hub-root');
+    hubDom.app.innerHTML = hubHtml;
+    const hubBox = {
+      document: hubDom.document,
+      location: { search: '', href: `${base}/demo/`, origin: base, protocol: 'http:', hash: '', reload() {} },
+      navigator: { userAgent: 'node-smoke' },
+      localStorage: makeStorage(), sessionStorage: makeStorage(),
+      fetch: (input, init) => fetch(String(input).startsWith('http') ? input : `${base}${input}`, init),
+      URLSearchParams, URL, AbortController, TextEncoder, TextDecoder,
+      setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
+      console, alert: message => { alerts.push(String(message)); }, confirm: () => true,
+      CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
+      EventSource: undefined,
+      Intl, Math, JSON, Number, String, Object, Array, Date,
+      scrollTo() {}
+    };
+    hubBox.window = hubBox;
+    hubBox.self = hubBox;
+    hubBox.window.__listeners = {};
+    hubBox.window.dispatchEvent = event => { (hubBox.window.__listeners[event.type] || []).forEach(handler => handler(event)); };
+    hubBox.window.addEventListener = (type, handler) => { (hubBox.window.__listeners[type] = hubBox.window.__listeners[type] || []).push(handler); };
+    hubBox.window.removeEventListener = () => {};
+    hubBox.ALL_GOLF_SERVER_MODE = true;
+    vm.createContext(hubBox);
+    loadScripts(hubBox, ['data/national-golf-courses.js', 'data/golf-courses.js', 'data/demo-teetimes.js', 'data/business-simulator.js', 'data/api-client.js', 'demo/demo.js']);
+    await sleep(1800);
+    const hubText = () => domText(hubDom);
+    const hubEl = selector => hubDom.document.querySelector(selector);
+    ok('허브가 서버 연동으로 표시', String(hubEl('#mode-chip') && hubEl('#mode-chip').textContent).includes('서버 연동'), hubEl('#mode-chip') && hubEl('#mode-chip').textContent);
+    eq('전국 골프장 509곳 표시', hubEl('#kpi-total') && hubEl('#kpi-total').textContent, '509곳');
+    eq('시연 예약 68곳 표시', hubEl('#kpi-partner') && hubEl('#kpi-partner').textContent, '68곳');
+    eq('정보 제공 441곳 표시', hubEl('#kpi-info') && hubEl('#kpi-info').textContent, '441곳');
+    ok('투자자 가이드 7단계 렌더', hubDom.document.querySelectorAll('.step').length === 7, hubDom.document.querySelectorAll('.step').length);
+    ok('투자자 진행률 표시', String(hubEl('#mode-progress') && hubEl('#mode-progress').textContent).includes('0 / 7 단계 완료'), hubEl('#mode-progress') && hubEl('#mode-progress').textContent);
+    const firstCheck = hubEl('[data-check="invest-1"]');
+    if (firstCheck) { firstCheck.checked = true; firstCheck.onchange && firstCheck.onchange({ target: firstCheck }); }
+    await sleep(200);
+    ok('체크 시 진행률 갱신', String(hubEl('#mode-progress') && hubEl('#mode-progress').textContent).includes('1 / 7 단계 완료'), hubEl('#mode-progress') && hubEl('#mode-progress').textContent);
+    ok('체크 상태가 저장됨', String(hubBox.localStorage.getItem('allGolfStage10Checklist') || '').includes('invest-1'), hubBox.localStorage.getItem('allGolfStage10Checklist'));
+    const partnerModeButton = hubDom.document.querySelector('[data-mode="partner"]');
+    if (partnerModeButton) partnerModeButton.click();
+    await sleep(200);
+    ok('제휴 모드 6단계로 전환', hubDom.document.querySelectorAll('.step').length === 6 && hubText().includes('제휴 신청 접수'), hubEl('#mode-progress') && hubEl('#mode-progress').textContent);
+
+    /* 사업성 시뮬레이터 */
+    const coursesField = hubEl('[data-sim="partnerCourses"]');
+    ok('시뮬레이터 입력 5개', hubDom.document.querySelectorAll('[data-sim]').length === 5, hubDom.document.querySelectorAll('[data-sim]').length);
+    eq('기본 계산 월 수수료', hubEl('#sim-fee-month') && hubEl('#sim-fee-month').textContent, '135,782,400원');
+    if (coursesField) { coursesField.value = '100'; coursesField.oninput && coursesField.oninput({ target: coursesField }); }
+    await sleep(150);
+    ok('입력 변경 시 즉시 재계산', hubEl('#sim-fee-month') && hubEl('#sim-fee-month').textContent !== '135,782,400원', hubEl('#sim-fee-month') && hubEl('#sim-fee-month').textContent);
+    const summaryBox = hubEl('#sim-summary');
+    ok('복사용 요약에 가정·면책 포함', Boolean(summaryBox) && summaryBox.value.includes('가정') && summaryBox.value.includes('실제 실적이 아닌'), summaryBox && summaryBox.value.slice(0, 80));
+    ok('화면에 면책 문구 표시', hubText().includes('가정 기반 시연 계산치'), hubEl('#sim-disclaimer') && hubEl('#sim-disclaimer').textContent);
+    const copyButton = hubEl('#sim-copy');
+    if (copyButton) copyButton.click();
+    await sleep(200);
+    ok('복사 버튼 동작(클립보드 없으면 안내)', String(hubEl('#sim-copy-status') && hubEl('#sim-copy-status').textContent).length > 0, hubEl('#sim-copy-status') && hubEl('#sim-copy-status').textContent);
+
+    /* 안전 가드: 문구·체크 없이는 실행되지 않는다. */
+    const manualAccountsBefore = await api('GET', '/api/admin/partner-accounts', adminToken);
+    const manualReservationsBefore = await api('GET', '/api/admin/reservations', adminToken);
+    const manualAccountCount = (manualAccountsBefore.data.accounts || []).length;
+    const manualReservationCount = (manualReservationsBefore.data.reservations || []).length;
+    eq('허브 초기화 버튼 잠김', hubEl('#btn-reset') && hubEl('#btn-reset').disabled, true);
+    eq('허브 준비 버튼 잠김', hubEl('#btn-stage') && hubEl('#btn-stage').disabled, true);
+    if (hubEl('#btn-reset')) hubEl('#btn-reset').click();
+    await sleep(300);
+    const statusAfterGuardClick = await api('GET', '/api/demo/stage10');
+    eq('가드 없이 클릭해도 데이터 변화 없음', statusAfterGuardClick.data.staged, false);
+
+    /* 관리자 확인 → 준비 */
+    hubEl('#admin-password').value = adminPassword;
+    hubEl('#admin-login').click();
+    await sleep(900);
+    ok('허브 관리자 확인 성공', String(hubEl('#admin-state') && hubEl('#admin-state').textContent).includes('확인됨'), hubEl('#admin-state') && hubEl('#admin-state').textContent);
+    hubEl('#stage-confirm').value = 'STAGE-STAGE10-DEMO';
+    hubEl('#stage-confirm').oninput && hubEl('#stage-confirm').oninput({ target: hubEl('#stage-confirm') });
+    eq('문구 입력 후 준비 버튼 활성화', hubEl('#btn-stage') && hubEl('#btn-stage').disabled, false);
+    hubEl('#btn-stage').click();
+    await sleep(3000);
+    const stagedStatus = await api('GET', '/api/demo/stage10');
+    ok('허브에서 시연 데이터 준비', stagedStatus.data.staged === true && stagedStatus.data.demo.teeTimes === 84, JSON.stringify(stagedStatus.data.demo));
+    ok('준비 결과 문구 표시', String(hubEl('#reset-result') && hubEl('#reset-result').textContent).includes('시연 데이터를 준비했습니다'), hubEl('#reset-result') && hubEl('#reset-result').textContent);
+    const healthAfterStage = await api('GET', '/api/health');
+    ok('티타임이 서버 DB에 반영(84건 이상)', healthAfterStage.data.db.teeTimes >= 84, healthAfterStage.data.db.teeTimes);
+    ok('일반 계정 유지(준비 단계)', (await api('GET', '/api/admin/partner-accounts', adminToken)).data.accounts.length >= manualAccountCount);
+
+    /* 초기화: 문구 + 체크 후에만 */
+    hubEl('#reset-confirm').value = 'RESET-STAGE10-DEMO';
+    hubEl('#reset-confirm').oninput && hubEl('#reset-confirm').oninput({ target: hubEl('#reset-confirm') });
+    eq('체크 없으면 초기화 버튼 잠김', hubEl('#btn-reset') && hubEl('#btn-reset').disabled, true);
+    hubEl('#reset-guard').checked = true;
+    hubEl('#reset-guard').onchange && hubEl('#reset-guard').onchange({ target: hubEl('#reset-guard') });
+    eq('문구+체크 후 초기화 버튼 활성화', hubEl('#btn-reset') && hubEl('#btn-reset').disabled, false);
+    hubEl('#btn-reset').click();
+    await sleep(3000);
+    const resetStatus = await api('GET', '/api/demo/stage10');
+    eq('허브에서 시연 데이터 초기화', resetStatus.data.staged, false);
+    eq('초기화 후 시연 티타임 0', resetStatus.data.demo.teeTimes, 0);
+    eq('초기화 후 시연 예약 0', resetStatus.data.demo.reservations, 0);
+    ok('초기화 결과 문구 표시', String(hubEl('#reset-result') && hubEl('#reset-result').textContent).includes('초기 시연 상태로 되돌렸습니다'), hubEl('#reset-result') && hubEl('#reset-result').textContent);
+    const manualAccountsAfter = await api('GET', '/api/admin/partner-accounts', adminToken);
+    const manualReservationsAfter = await api('GET', '/api/admin/reservations', adminToken);
+    eq('초기화 후 일반 담당자 계정 보존', (manualAccountsAfter.data.accounts || []).length, manualAccountCount);
+    eq('초기화 후 일반 예약 보존', (manualReservationsAfter.data.reservations || []).length, manualReservationCount);
+
     /* --- 정적 모드(서버 없음): 9단계 화면도 요청 0건 ------------------------ */
     section('화면 스모크 · 정적 모드 9단계 페이지(API 요청 0건)');
     const staticDom = createDom('admin-app');
@@ -537,6 +653,41 @@ async function main() {
     await sleep(400);
     ok('정적 모드 정산 화면 안내', domText(staticDom).includes('정적 시연 모드의 예시 표'), domText(staticDom).slice(-260));
     eq('정적 모드에서 API 요청 0건', staticCalls.count, 0);
+
+    /* 10단계: 정적 배포(GitHub Pages)에서 시연 허브도 요청 0건으로 렌더된다. */
+    section('화면 스모크 · 10단계 시연 허브(정적 배포, API 요청 0건)');
+    const hubStaticDom = createDom('hub-root');
+    hubStaticDom.app.innerHTML = hubHtml;
+    const hubStaticCalls = { count: 0 };
+    const hubStaticBox = {
+      document: hubStaticDom.document,
+      location: { search: '', href: 'https://neved12.github.io/all-golf-test/demo/', origin: 'https://neved12.github.io', protocol: 'https:', hash: '', reload() {} },
+      navigator: { userAgent: 'node-smoke' },
+      localStorage: makeStorage(), sessionStorage: makeStorage(),
+      fetch: () => { hubStaticCalls.count += 1; return Promise.reject(new Error('no network')); },
+      URLSearchParams, URL, AbortController,
+      setTimeout, clearTimeout, setInterval: () => 0, clearInterval: () => {},
+      console, alert: () => {}, confirm: () => false,
+      CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
+      EventSource: undefined,
+      Intl, Math, JSON, Number, String, Object, Array, Date,
+      scrollTo() {}
+    };
+    hubStaticBox.window = hubStaticBox;
+    hubStaticBox.self = hubStaticBox;
+    hubStaticBox.window.__listeners = {};
+    hubStaticBox.window.dispatchEvent = event => { (hubStaticBox.window.__listeners[event.type] || []).forEach(handler => handler(event)); };
+    hubStaticBox.window.addEventListener = (type, handler) => { (hubStaticBox.window.__listeners[type] = hubStaticBox.window.__listeners[type] || []).push(handler); };
+    hubStaticBox.window.removeEventListener = () => {};
+    vm.createContext(hubStaticBox);
+    loadScripts(hubStaticBox, ['data/national-golf-courses.js', 'data/golf-courses.js', 'data/demo-teetimes.js', 'data/business-simulator.js', 'data/api-client.js', 'demo/demo.js']);
+    await sleep(900);
+    const hubStaticText = domText(hubStaticDom);
+    ok('정적 허브 렌더(정적 시연 표시)', String(hubStaticDom.document.querySelector('#mode-chip') && hubStaticDom.document.querySelector('#mode-chip').textContent).includes('정적 시연') && hubStaticText.includes('사업성 시뮬레이터'), hubStaticDom.document.querySelector('#mode-chip') && hubStaticDom.document.querySelector('#mode-chip').textContent);
+    eq('정적 허브 카탈로그 509곳', hubStaticDom.document.querySelector('#kpi-total') && hubStaticDom.document.querySelector('#kpi-total').textContent, '509곳');
+    eq('정적 허브 시뮬레이터 계산', hubStaticDom.document.querySelector('#sim-fee-month') && hubStaticDom.document.querySelector('#sim-fee-month').textContent, '135,782,400원');
+    ok('정적 허브 준비 버튼 잠김(서버 없음)', hubStaticDom.document.querySelector('#btn-stage') && hubStaticDom.document.querySelector('#btn-stage').disabled === true);
+    eq('정적 허브 API 요청 0건', hubStaticCalls.count, 0);
   } finally {
     await stopServer(server);
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }

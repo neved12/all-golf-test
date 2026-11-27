@@ -294,3 +294,12 @@ main { padding:0 18px 30px; }
 
 /* 8단계: 서버 예약·재고 실시간 연동 안내 */
 .linked-note{display:flex;align-items:center;gap:6px;margin:8px 0 4px;padding:8px 10px;border:1px solid #8cdec0;background:#effcf6;border-radius:10px;color:#087857;font-size:10px;font-weight:700;line-height:1.5}
+
+/* 10단계: 시연 허브 진입 카드 */
+.stage10-hub{margin-top:20px;border:1px solid #b4e8d3;background:linear-gradient(135deg,#f2fcf7,#eefaf4);border-radius:15px;padding:15px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.stage10-copy{display:grid;gap:5px;min-width:0}
+.stage10-copy .kicker{color:var(--mint);font-weight:800;font-size:11px}
+.stage10-copy b{font-size:14px;overflow-wrap:anywhere}
+.stage10-copy span{font-size:11px;color:var(--muted);line-height:1.6;overflow-wrap:anywhere}
+.stage10-hub a.stage10-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:11px 14px;border-radius:10px;font-size:12px;font-weight:800;white-space:nowrap;background:var(--ink);color:#fff}
+@media(max-width:420px){.stage10-hub{align-items:flex-start}.stage10-hub a.stage10-link{width:100%}}

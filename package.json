@@ -1,23 +1,25 @@
 {
   "name": "all-golf-test",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "private": true,
-  "description": "ALL:GOLF 시연용 골프 예약 서비스(9단계: 본사 운영 통계·제휴 성과·수수료/정산 시뮬레이션·운영 알림 로그). 정적 데모(GitHub Pages)와 무의존성 Node.js 서버를 함께 제공합니다.",
+  "description": "ALL:GOLF 시연용 골프 예약 서비스(10단계: 원클릭 시연 데이터·투자자/골프장 제휴 시연 허브·사업성 시뮬레이터). 정적 데모(GitHub Pages)와 무의존성 Node.js 서버를 함께 제공합니다.",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "test": "node tests/national-data-integrity.js && node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js && node tests/run-stage8-scenarios.js && node tests/run-stage9-scenarios.js",
+    "test": "node tests/national-data-integrity.js && node tests/run-scenarios.js && node tests/run-server-scenarios.js && node tests/run-stage7-scenarios.js && node tests/run-stage8-scenarios.js && node tests/run-stage9-scenarios.js && node tests/run-stage10-scenarios.js",
     "test:data": "node tests/national-data-integrity.js",
     "test:regression": "node tests/run-scenarios.js",
     "test:server": "node tests/run-server-scenarios.js",
     "test:stage7": "node tests/run-stage7-scenarios.js",
+    "test:stage8": "node tests/run-stage8-scenarios.js",
+    "test:stage9": "node tests/run-stage9-scenarios.js",
+    "test:stage10": "node tests/run-stage10-scenarios.js",
     "test:ui": "node tests/run-ui-smoke.js",
     "db:backup": "node server/scripts/backup.js",
     "db:restore": "node server/scripts/restore.js",
     "db:reset-demo": "node server/scripts/reset-demo.js",
     "demo:partner-accounts": "node server/scripts/seed-partner-accounts.js",
-    "test:stage8": "node tests/run-stage8-scenarios.js",
-    "test:stage9": "node tests/run-stage9-scenarios.js"
+    "demo:stage10": "node server/scripts/stage10-demo.js"
   },
   "engines": {
     "node": ">=18"

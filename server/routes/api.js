@@ -13,6 +13,7 @@ const operations = require('../lib/operations');
 const analytics = require('../lib/analytics');
 const accounts = require('../lib/accounts');
 const reservations = require('../lib/reservations');
+const demoStage10 = require('../lib/demo-stage10');
 const http = require('../lib/http');
 
 class HttpError extends Error {
@@ -227,8 +228,8 @@ function createApi(options) {
         ok: true,
         name: config.serverName,
         version: config.version,
-        stage: 9,
-        stages: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        stage: 10,
+        stages: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
         time: nowIso(),
         uptimeSec: Math.round(process.uptime()),
         auth: { configured: !config.usingDefaultPassword, mode: config.usingDefaultPassword ? 'demo-default-password' : 'env', partnerAccounts: true },
@@ -273,7 +274,9 @@ function createApi(options) {
           analytics: true,
           settlements: true,
           commissions: true,
-          notifications: true
+          notifications: true,
+          demoStage: true,
+          demoReset: true
         },
         hold: { ttlSec: Math.round(config.holdTtlMs / 1000), maxPerSession: config.maxHoldsPerSession },
         settlement: {
@@ -2256,10 +2259,59 @@ function createApi(options) {
       return;
     }
 
+    if (pathname === '/api/demo/stage10' && method === 'GET') {
+      /* 시연 허브 상태: 개인정보 없이 개수·배치 정보만 공개한다. 초기화/준비는 관리자 인증이 필요하다. */
+      const db = store.read();
+      http.sendJson(res, 200, {
+        ...demoStage10.demoStatus(db),
+        guide: demoStage10.flowGuide(),
+        confirmPhrases: {
+          stage: demoStage10.CONFIRM_STAGE,
+          reset: demoStage10.CONFIRM_RESET
+        },
+        flows: { investorCourses: 68, infoOnlyCourses: Math.max(0, catalog.courses.length - catalog.baselinePartnerIds.length), totalCourses: catalog.courses.length }
+      });
+      return;
+    }
+
+    if (pathname === '/api/demo/stage10/stage' && method === 'POST') {
+      const { payload } = requireAdmin(req);
+      const body = await http.readJson(req);
+      const confirmation = String(body.confirm || '');
+      if (confirmation !== demoStage10.CONFIRM_STAGE) {
+        throw new HttpError(400, 'confirm_required', `확인 문구가 필요합니다. "${demoStage10.CONFIRM_STAGE}" 를 정확히 입력해야 시연 데이터를 준비합니다.`, { expected: demoStage10.CONFIRM_STAGE });
+      }
+      const actor = adminActor(req, payload, { note: 'demo-stage10' });
+      const { result } = await store.update(db => demoStage10.stageDemo(db, { confirm: confirmation, catalog, actor, now: new Date() }));
+      broadcast('demo.stage10', { action: 'staged', batch: result.batch, at: nowIso() });
+      broadcast('inventory.changed', { reason: 'demo-staged', at: nowIso() });
+      broadcast('catalog.changed', { kind: 'demo-stage10', at: nowIso() });
+      http.sendJson(res, 201, { ...result, ok: true });
+      return;
+    }
+
+    if (pathname === '/api/demo/stage10/reset' && method === 'POST') {
+      const { payload } = requireAdmin(req);
+      const body = await http.readJson(req);
+      const confirmation = String(body.confirm || '');
+      if (confirmation !== demoStage10.CONFIRM_RESET) {
+        throw new HttpError(400, 'confirm_required', `확인 문구가 필요합니다. "${demoStage10.CONFIRM_RESET}" 를 정확히 입력해야 시연 데이터를 초기화합니다.`, { expected: demoStage10.CONFIRM_RESET });
+      }
+      const actor = adminActor(req, payload, { note: 'demo-stage10-reset' });
+      const before = store.read();
+      const preview = demoStage10.demoStatus(before);
+      const { result } = await store.update(db => demoStage10.resetDemo(db, { confirm: confirmation, actor }));
+      broadcast('demo.stage10', { action: 'reset', at: nowIso() });
+      broadcast('inventory.changed', { reason: 'demo-reset', at: nowIso() });
+      broadcast('catalog.changed', { kind: 'demo-stage10', at: nowIso() });
+      http.sendJson(res, 200, { ...result, before: preview.demo, preservedBefore: preview.protectedRecords });
+      return;
+    }
+
     if (pathname === '/api/events' && method === 'GET') {
       const client = http.openSse(res);
       sseClients.add(client);
-      client.send('hello', { at: nowIso(), mode: 'server', stage: 9 });
+      client.send('hello', { at: nowIso(), mode: 'server', stage: 10 });
       const ping = setInterval(() => client.ping(), 15000);
       if (ping.unref) ping.unref();
       req.on('close', () => {
