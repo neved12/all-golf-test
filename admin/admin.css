@@ -33,3 +33,6 @@
 /* 7단계: 계정·운영 현황 */
 .ops-inline{display:block;color:#a56b00;font-size:9px;margin-top:3px}
 .date-picker{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;color:var(--deep)}
+
+a.nav.demo-link{display:block;text-decoration:none;color:#c6d9d3}
+a.nav.demo-link:hover{background:#1f4d41;color:#fff}

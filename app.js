@@ -467,6 +467,15 @@ function home() {
     <button data-wait-pick>빈자리 알림 등록</button>
   </section>
 
+  <section class="section stage10-hub">
+    <div class="stage10-copy">
+      <div class="kicker">10단계 · 투자·제휴 시연</div>
+      <b>전국 509곳 · 시연 예약 68곳 · 정보 전용 441곳</b>
+      <span>투자자·골프장 제휴 시연 가이드와 사업성 시뮬레이터를 한 화면에서 시작합니다.</span>
+    </div>
+    <a class="primary stage10-link" href="demo/">시연 허브 열기</a>
+  </section>
+
   <section class="section">
     ${sectionHead('이번 주말', '주말 라운드는 어디서?', '전체보기', 'data-go="list"')}
     <div class="time-card-list">${featured.slice(1).map(homeCard).join('')}</div>

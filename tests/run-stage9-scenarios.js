@@ -150,8 +150,8 @@ async function main() {
     server = await startServer(env);
     const health = await waitForHealth(base);
     ok('서버 기동 · /api/health 200', health && health.ok === true);
-    eq('9단계 서버 표시', health.stage, 9);
-    ok('1~9단계 표시', Array.isArray(health.stages) && health.stages.length === 9 && health.stages[8] === 9, JSON.stringify(health.stages));
+    ok('9단계 이상 서버 표시(9단계 기능 유지)', Number(health.stage) >= 9, health.stage);
+    ok('1~9단계 표시 유지', Array.isArray(health.stages) && health.stages.length >= 9 && health.stages[8] === 9, JSON.stringify(health.stages));
     eq('DB 스키마 4', health.db.schemaVersion, 4);
     ok('통계·정산·수수료·알림 기능 표시', health.features.analytics === true && health.features.settlements === true
       && health.features.commissions === true && health.features.notifications === true);
