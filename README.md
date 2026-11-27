@@ -157,5 +157,5 @@ tests/                           브라우저 없이 실행하는 시나리오 �
 - 수동 백업/복구: `npm run db:backup`, `npm run db:restore -- <파일>`
 - 자세한 내용: [`server/data/README.md`](server/data/README.md)
 
-10단계 구현·검증 결과와 투자·제휴 자료는 `downloads/ALLGOLF_10단계_최종보고서`(사용자 작업공간)에 정리했습니다.
+10단계 구현·검증 결과는 [ALLGOLF_10단계_완료보고서.md](ALLGOLF_10단계_완료보고서.md) 에, 투자·제휴 자료 패키지는 `downloads/ALLGOLF_10단계_최종보고서`(사용자 작업공간)에 정리했습니다.
 1~9단계 전체 통합 검증은 [ALLGOLF_1-9단계_통합검증보고서.md](ALLGOLF_1-9단계_통합검증보고서.md) 에 있습니다.
